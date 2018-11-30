@@ -9,16 +9,34 @@ output: html_document
 
 # install required libraries
 library(tidyverse)
-
+library(readr)
+library(tidytext)
 
 # download and unzip data folder
-file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
 
-temp <- tempfile()
+# load each data set to an object
+if(file.exists("../data/temp.data/sample.en_us.blogs.txt")){
+    sample.en_us.blogs <- read_tsv("../data/temp.data/sample.en_us.blogs.txt")
+} else {
+    data.en_us.blogs <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+    # create a sample
+    sample.en_us.blogs <- sample_n(data.en_us.blogs,
+                                  size = 0.25 * dim(data.en_us.blogs)[1],
+                                  replace = FALSE)
+    # write the sample to txt file in "output"
+    write.table(sample.en_us.blogs,
+            "../data/temp.data/sample.en_us.blogs.txt")
+    # remove original data
+    rm(data.en_us.blogs)
+    }
 
-download.file(file.url, temp, mode = "wb")
 
-unzip(temp, exdir = "../data/Coursera-SwiftKey")
 
-rm(temp)
 ```
