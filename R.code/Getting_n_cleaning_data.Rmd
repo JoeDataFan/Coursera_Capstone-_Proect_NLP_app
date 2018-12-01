@@ -16,6 +16,9 @@ output: html_document
 
 # ##############################################################################
 ```{r setup, include=FALSE}
+# clear environment
+rm(list = ls())
+
 
 # Libraries----
 library(tidyverse)
@@ -42,12 +45,14 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 
 # Load then sample a portion of data then save to file
 sample.size <- 0.25 # proportion of orignal text data to save to file
+init.col.name <- "txt_sample"
 
 # load en_US.blogs.txt
 if(file.exists("../data/temp.data/sample.en_us.blogs.txt")){
     sample.en_us.blogs <- read_tsv("../data/temp.data/sample.en_us.blogs.txt")
 } else {
-    data.en_us.blogs <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+    data.en_us.blogs <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                                   col_names = init.col.name)
     # create a sample
     sample.en_us.blogs <- sample_n(data.en_us.blogs,
                                   size = sample.size * dim(data.en_us.blogs)[1],
@@ -64,7 +69,8 @@ if(file.exists("../data/temp.data/sample.en_us.blogs.txt")){
 if(file.exists("../data/temp.data/sample.en_us.news.txt")){
     sample.en_us.news <- read_tsv("../data/temp.data/sample.en_us.news.txt")
 } else {
-    data.en_us.news <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt")
+    data.en_us.news <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt",
+                                   col_names = init.col.name)
     # create a sample
     sample.en_us.news <- sample_n(data.en_us.news,
                                   size = sample.size * dim(data.en_us.news)[1],
@@ -81,7 +87,8 @@ if(file.exists("../data/temp.data/sample.en_us.news.txt")){
 if(file.exists("../data/temp.data/sample.en_us.twitter.txt")){
     sample.en_us.twitter <- read_tsv("../data/temp.data/sample.en_us.twitter.txt")
 } else {
-    data.en_us.twitter <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+    data.en_us.twitter <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                                   col_names = init.col.name)
     # create a sample
     sample.en_us.twitter <- sample_n(data.en_us.twitter,
                                      size = sample.size * dim(data.en_us.twitter)[1],
@@ -93,6 +100,33 @@ if(file.exists("../data/temp.data/sample.en_us.twitter.txt")){
     rm(data.en_us.twitter)
     }
 
+# Add line variable to data----
+sample.en_us.blogs$line <- 1:length(sample.en_us.blogs$txt_sample)
+sample.en_us.blogs <- sample.en_us.blogs[, c(2, 1)] # reorder data frame
 
-```
+sample.en_us.news$line <- 1:length(sample.en_us.news$txt_sample)
+sample.en_us.news <- sample.en_us.news[, c(2, 1)] # reorder data frame
+    
+sample.en_us.twitter$line <- 1:length(sample.en_us.twitter$txt_sample)
+sample.en_us.twitter <- sample.en_us.twitter[, c(2, 1)] # reorder data frame
+
+# Tokenize data----
+data.blogs <- unnest_tokens(tbl = sample.en_us.blogs,
+                            output = words,
+                            input = txt_sample,
+                            token = "words",
+                            to_lower = FALSE)
+
+data.news <- unnest_tokens(tbl = sample.en_us.news,
+                            output = words,
+                            input = txt_sample,
+                            token = "words",
+                            to_lower = FALSE)
+
+data.twitter <- unnest_tokens(tbl = sample.en_us.twitter,
+                            output = words,
+                            input = txt_sample,
+                            token = "tweets",
+                            to_lower = FALSE)
+```                            
 # ##############################################################################
