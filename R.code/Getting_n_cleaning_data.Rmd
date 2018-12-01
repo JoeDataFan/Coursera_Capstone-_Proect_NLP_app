@@ -5,13 +5,31 @@ date: "November 28, 2018"
 output: html_document
 ---
 
+# Todo:
+- alter code to readin random sample of txt data then write to file so as to avoid reading in entire file.
+- ensure that file has been read in correctly
+- where are the tags for the corporas that was mentioned?
+- get txt files to tidy state with:
+    - word number
+    - sentence number
+- figureout how to remove bad language
+
+# ##############################################################################
 ```{r setup, include=FALSE}
 
-# install required libraries
+# Libraries----
 library(tidyverse)
 library(readr)
 library(tidytext)
 
+
+# Themes----
+
+
+# Fucntions-----
+
+
+# Load data----
 # download and unzip data folder
 if(!dir.exists("../data/Coursera-SwiftKey/")){
     file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
@@ -21,22 +39,60 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
-# load each data set to an object
+
+# Load then sample a portion of data then save to file
+sample.size <- 0.25 # proportion of orignal text data to save to file
+
+# load en_US.blogs.txt
 if(file.exists("../data/temp.data/sample.en_us.blogs.txt")){
     sample.en_us.blogs <- read_tsv("../data/temp.data/sample.en_us.blogs.txt")
 } else {
     data.en_us.blogs <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
     # create a sample
     sample.en_us.blogs <- sample_n(data.en_us.blogs,
-                                  size = 0.25 * dim(data.en_us.blogs)[1],
+                                  size = sample.size * dim(data.en_us.blogs)[1],
                                   replace = FALSE)
     # write the sample to txt file in "output"
-    write.table(sample.en_us.blogs,
+    write_tsv(sample.en_us.blogs,
             "../data/temp.data/sample.en_us.blogs.txt")
     # remove original data
     rm(data.en_us.blogs)
     }
 
 
+# load en_US.news.txt
+if(file.exists("../data/temp.data/sample.en_us.news.txt")){
+    sample.en_us.news <- read_tsv("../data/temp.data/sample.en_us.news.txt")
+} else {
+    data.en_us.news <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt")
+    # create a sample
+    sample.en_us.news <- sample_n(data.en_us.news,
+                                  size = sample.size * dim(data.en_us.news)[1],
+                                  replace = FALSE)
+    # write the sample to txt file in "output"
+    write_tsv(sample.en_us.news,
+            "../data/temp.data/sample.en_us.news.txt")
+    # remove original data
+    rm(data.en_us.news)
+}
+
+
+# load en_US.twitter.txt
+if(file.exists("../data/temp.data/sample.en_us.twitter.txt")){
+    sample.en_us.twitter <- read_tsv("../data/temp.data/sample.en_us.twitter.txt")
+} else {
+    data.en_us.twitter <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+    # create a sample
+    sample.en_us.twitter <- sample_n(data.en_us.twitter,
+                                     size = sample.size * dim(data.en_us.twitter)[1],
+                                     replace = FALSE)
+    # write the sample to txt file in "output"
+    write_tsv(sample.en_us.twitter,
+            "../data/temp.data/sample.en_us.twitter.txt")
+    # remove original data
+    rm(data.en_us.twitter)
+    }
+
 
 ```
+# ##############################################################################
