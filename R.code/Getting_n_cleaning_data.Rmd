@@ -6,12 +6,8 @@ output: html_document
 ---
 
 # Todo:
-- alter code to readin random sample of txt data then write to file so as to avoid reading in entire file.
 - ensure that file has been read in correctly
 - where are the tags for the corporas that was mentioned?
-- get txt files to tidy state with:
-    - word number
-    - sentence number
 - figureout how to remove bad language
 
 # ##############################################################################
