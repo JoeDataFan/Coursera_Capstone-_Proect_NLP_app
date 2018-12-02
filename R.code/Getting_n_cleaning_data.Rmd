@@ -24,13 +24,17 @@ rm(list = ls())
 library(tidyverse)
 library(readr)
 library(tidytext)
+library(stringr)
+library(purrr)
 
 
 # Themes----
 
 
 # Fucntions-----
-
+cleanFiles<-function(file,newfile){
+    writeLines(iconv(readLines(file,skipNul = TRUE)),newfile)
+}
 
 # Load data----
 # download and unzip data folder
@@ -47,86 +51,155 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 sample.size <- 0.25 # proportion of orignal text data to save to file
 init.col.name <- "txt_sample"
 
-# load en_US.blogs.txt
-if(file.exists("../data/temp.data/sample.en_us.blogs.txt")){
-    sample.en_us.blogs <- read_tsv("../data/temp.data/sample.en_us.blogs.txt")
+# load en_US.blogs.txt----
+if(file.exists("../data/temp.data/data.blogs.csv")){
+    sample.blogs <- read_csv("../data/temp.data/data.blogs.csv")
 } else {
-    data.en_us.blogs <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
-                                   col_names = init.col.name)
+    data.raw.blogs <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                                    skipNul = TRUE,
+                                    encoding="UTF-8")
     # create a sample
-    sample.en_us.blogs <- sample_n(data.en_us.blogs,
-                                  size = sample.size * dim(data.en_us.blogs)[1],
-                                  replace = FALSE)
+    sample.blogs <- sample(data.raw.blogs,
+                           size = sample.size * length(data.raw.blogs),
+                           replace = FALSE)
     # write the sample to txt file in "output"
-    write_tsv(sample.en_us.blogs,
-            "../data/temp.data/sample.en_us.blogs.txt")
+    writeLines(sample.blogs,
+            "../data/temp.data/sample.blogs.csv")
     # remove original data
-    rm(data.en_us.blogs)
+    #rm(data.raw.blogs)
     }
 
-
-# load en_US.news.txt
-if(file.exists("../data/temp.data/sample.en_us.news.txt")){
-    sample.en_us.news <- read_tsv("../data/temp.data/sample.en_us.news.txt")
+# load en_US.news.txt----
+if(file.exists("../data/temp.data/data.news.csv")){
+    sample.news <- read_csv("../data/temp.data/data.news.csv")
 } else {
-    data.en_us.news <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt",
-                                   col_names = init.col.name)
+    data.raw.news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+                                    skipNul = TRUE)
     # create a sample
-    sample.en_us.news <- sample_n(data.en_us.news,
-                                  size = sample.size * dim(data.en_us.news)[1],
-                                  replace = FALSE)
+    sample.news <- sample(data.raw.news,
+                           size = sample.size * length(data.raw.news),
+                           replace = FALSE)
     # write the sample to txt file in "output"
-    write_tsv(sample.en_us.news,
-            "../data/temp.data/sample.en_us.news.txt")
+    writeLines(sample.news,
+            "../data/temp.data/sample.news.csv")
     # remove original data
-    rm(data.en_us.news)
+    #rm(data.raw.news)
+    }
+
+# load en_US.twitter.txt----
+if(file.exists("../data/temp.data/data.twitter.csv")){
+    sample.twitter <- read_csv("../data/temp.data/data.twitter.csv")
+} else {
+    data.raw.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                                    skipNul = TRUE,
+                                    encoding="UTF-8")
+    # create a sample
+    sample.twitter <- sample(data.raw.twitter,
+                           size = sample.size * length(data.raw.twitter),
+                           replace = FALSE)
+    # write the sample to txt file in "output"
+    writeLines(sample.twitter,
+            "../data/temp.data/sample.twitter.csv")
+    # remove original data
+    #rm(data.raw.twitter)
 }
 
-
-# load en_US.twitter.txt
-if(file.exists("../data/temp.data/sample.en_us.twitter.txt")){
-    sample.en_us.twitter <- read_tsv("../data/temp.data/sample.en_us.twitter.txt")
-} else {
-    data.en_us.twitter <- read_tsv("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
-                                   col_names = init.col.name)
-    # create a sample
-    sample.en_us.twitter <- sample_n(data.en_us.twitter,
-                                     size = sample.size * dim(data.en_us.twitter)[1],
-                                     replace = FALSE)
-    # write the sample to txt file in "output"
-    write_tsv(sample.en_us.twitter,
-            "../data/temp.data/sample.en_us.twitter.txt")
-    # remove original data
-    rm(data.en_us.twitter)
-    }
-
 # Add line variable to data----
-sample.en_us.blogs$line <- 1:length(sample.en_us.blogs$txt_sample)
-sample.en_us.blogs <- sample.en_us.blogs[, c(2, 1)] # reorder data frame
-
-sample.en_us.news$line <- 1:length(sample.en_us.news$txt_sample)
-sample.en_us.news <- sample.en_us.news[, c(2, 1)] # reorder data frame
-    
-sample.en_us.twitter$line <- 1:length(sample.en_us.twitter$txt_sample)
-sample.en_us.twitter <- sample.en_us.twitter[, c(2, 1)] # reorder data frame
+data.blogs <- tibble(line = 1:length(data.raw.blogs),
+                         txt_sample = data.raw.blogs)
+data.news <- tibble(line = 1:length(data.raw.news),
+                         txt_sample = data.raw.news)
+data.twitter <- tibble(line = 1:length(data.raw.twitter),
+                         txt_sample = data.raw.twitter)
 
 # Tokenize data----
-data.blogs <- unnest_tokens(tbl = sample.en_us.blogs,
+data.blogs <- unnest_tokens(tbl = data.blogs,
                             output = words,
                             input = txt_sample,
                             token = "words",
                             to_lower = FALSE)
-
-data.news <- unnest_tokens(tbl = sample.en_us.news,
+data.news <- unnest_tokens(tbl = data.news,
                             output = words,
                             input = txt_sample,
                             token = "words",
                             to_lower = FALSE)
-
-data.twitter <- unnest_tokens(tbl = sample.en_us.twitter,
+data.twitter <- unnest_tokens(tbl = data.twitter,
                             output = words,
                             input = txt_sample,
-                            token = "tweets",
+                            token = "words",
                             to_lower = FALSE)
+# remove unneeded objects
+#rm(sample.en_us.blogs,
+#  sample.en_us.news,
+#  sample.en_us.twitter,
+#  init.col.name,
+#  sample.size)
 ```                            
 # ##############################################################################
+
+# Exploration
+```{r most and common words}
+most.common.blog <- data.blogs %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100) %>% 
+    select(words) %>% 
+    rename(blog.words = words)
+   
+most.common.news <- data.news %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100)%>% 
+    select(words)%>% 
+    rename(news.words = words)
+
+most.common.twitter <- data.twitter %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100)%>% 
+    select(words)%>% 
+    rename(twitter.words = words)
+
+most.common.words <- bind_cols(most.common.blog, most.common.news, most.common.twitter)
+
+```
+```{r bad words}
+unique(data.blogs$words)[unique(data.blogs$words) %in% c("fuck", "shit", "pussy")]
+```
+```{r longest lines}
+# longest lines in data sets
+map_dbl(data.raw.blogs, nchar) %>% 
+    max()
+
+map_dbl(data.raw.news, nchar) %>% 
+    max()
+
+map_dbl(data.raw.twitter, nchar) %>% 
+    max()
+
+```
+```{r love vs hate}
+lines_love <- data.twitter %>% 
+    mutate(love = str_detect(words, "love"))%>%
+    group_by(line) %>%
+    summarise(love_by_line = sum(love)) %>% 
+    filter(love_by_line != 0)
+
+lines_hate <- data.twitter %>% 
+    mutate(hate = str_detect(words, "hate"))%>%
+    group_by(line) %>%
+    summarise(hate_by_line = sum(hate)) %>% 
+    filter(hate_by_line != 0)
+
+
+dim(lines_love)[1] / dim(lines_hate)[1]
+```
+```{r biostats tweet}
+data.raw.twitter[str_which(data.raw.twitter, " biostats ")]
+```
+```{r tests}
+x <- c("the following is a test", "another test\r\nyest another test", "testing again")
+
+str_split(x, "\r\n")
+```
+```{r number tweets matching phrase}
+str_which(data.raw.twitter, "A computer once beat me at chess, but it was no match for me at kickboxing")
+```
+
