@@ -49,7 +49,6 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 
 # Load then sample a portion of data then save to file
 sample.size <- 0.25 # proportion of orignal text data to save to file
-init.col.name <- "txt_sample"
 
 # load en_US.blogs.txt----
 if(file.exists("../data/temp.data/data.blogs.csv")){
@@ -66,7 +65,7 @@ if(file.exists("../data/temp.data/data.blogs.csv")){
     writeLines(sample.blogs,
             "../data/temp.data/sample.blogs.csv")
     # remove original data
-    #rm(data.raw.blogs)
+    rm(data.raw.blogs)
     }
 
 # load en_US.news.txt----
@@ -83,7 +82,7 @@ if(file.exists("../data/temp.data/data.news.csv")){
     writeLines(sample.news,
             "../data/temp.data/sample.news.csv")
     # remove original data
-    #rm(data.raw.news)
+    rm(data.raw.news)
     }
 
 # load en_US.twitter.txt----
@@ -101,16 +100,16 @@ if(file.exists("../data/temp.data/data.twitter.csv")){
     writeLines(sample.twitter,
             "../data/temp.data/sample.twitter.csv")
     # remove original data
-    #rm(data.raw.twitter)
+    rm(data.raw.twitter)
 }
 
 # Add line variable to data----
-data.blogs <- tibble(line = 1:length(data.raw.blogs),
-                         txt_sample = data.raw.blogs)
-data.news <- tibble(line = 1:length(data.raw.news),
-                         txt_sample = data.raw.news)
-data.twitter <- tibble(line = 1:length(data.raw.twitter),
-                         txt_sample = data.raw.twitter)
+data.blogs <- tibble(line = 1:length(sample.blogs),
+                         txt_sample = sample.blogs)
+data.news <- tibble(line = 1:length(sample.news),
+                         txt_sample = sample.news)
+data.twitter <- tibble(line = 1:length(sample.twitter),
+                         txt_sample = sample.twitter)
 
 # Tokenize data----
 data.blogs <- unnest_tokens(tbl = data.blogs,
@@ -128,41 +127,11 @@ data.twitter <- unnest_tokens(tbl = data.twitter,
                             input = txt_sample,
                             token = "words",
                             to_lower = FALSE)
-# remove unneeded objects
-#rm(sample.en_us.blogs,
-#  sample.en_us.news,
-#  sample.en_us.twitter,
-#  init.col.name,
-#  sample.size)
+
 ```                            
 # ##############################################################################
 
-# Exploration
-```{r most and common words}
-most.common.blog <- data.blogs %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100) %>% 
-    select(words) %>% 
-    rename(blog.words = words)
-   
-most.common.news <- data.news %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100)%>% 
-    select(words)%>% 
-    rename(news.words = words)
-
-most.common.twitter <- data.twitter %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100)%>% 
-    select(words)%>% 
-    rename(twitter.words = words)
-
-most.common.words <- bind_cols(most.common.blog, most.common.news, most.common.twitter)
-
-```
-```{r bad words}
-unique(data.blogs$words)[unique(data.blogs$words) %in% c("fuck", "shit", "pussy")]
-```
+# Quiz week 1
 ```{r longest lines}
 # longest lines in data sets
 map_dbl(data.raw.blogs, nchar) %>% 
@@ -194,12 +163,35 @@ dim(lines_love)[1] / dim(lines_hate)[1]
 ```{r biostats tweet}
 data.raw.twitter[str_which(data.raw.twitter, " biostats ")]
 ```
-```{r tests}
-x <- c("the following is a test", "another test\r\nyest another test", "testing again")
 
-str_split(x, "\r\n")
-```
 ```{r number tweets matching phrase}
-str_which(data.raw.twitter, "A computer once beat me at chess, but it was no match for me at kickboxing")
+str_which(data.raw.twitter, "A computer once beat me at chess, but it was no match for me at kickboxing") %>% 
+    length()
 ```
+#.
+# Exploration
+```{r most and common words}
+most.common.blog <- data.blogs %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100) %>% 
+    select(words) %>% 
+    rename(blog.words = words)
+   
+most.common.news <- data.news %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100)%>% 
+    select(words)%>% 
+    rename(news.words = words)
 
+most.common.twitter <- data.twitter %>%
+    count(words, sort = TRUE) %>% 
+    head(n = 100)%>% 
+    select(words)%>% 
+    rename(twitter.words = words)
+
+most.common.words <- bind_cols(most.common.blog, most.common.news, most.common.twitter)
+
+```
+```{r bad words}
+unique(data.blogs$words)[unique(data.blogs$words) %in% c("fuck", "shit", "pussy")]
+```
