@@ -9,6 +9,7 @@ output: html_document
 - ensure that file has been read in correctly
 - where are the tags for the corporas that was mentioned?
 - figureout how to remove bad language
+- consider changing sample data back to text file then read text... may be faster
 
 # ##############################################################################
 ```{r setup, include=FALSE}
@@ -22,6 +23,8 @@ library(readr)
 library(tidytext)
 library(stringr)
 library(purrr)
+library(quanteda)
+library(tm)
 
 
 # Themes----
@@ -47,8 +50,8 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 sample.size <- 0.25 # proportion of orignal text data to save to file
 
 # load en_US.blogs.txt----
-if(file.exists("../data/temp.data/data.blogs.csv")){
-    sample.blogs <- read_csv("../data/temp.data/data.blogs.csv")
+if(file.exists("../data/temp.data/data.blogs.txt")){
+    sample.blogs <- read_tsv("../data/temp.data/data.blogs.txt")
 } else {
     data.raw.blogs <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
                                     skipNul = TRUE,
@@ -59,14 +62,14 @@ if(file.exists("../data/temp.data/data.blogs.csv")){
                            replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.blogs,
-            "../data/temp.data/sample.blogs.csv")
+            "../data/temp.data/sample.blogs.txt")
     # remove original data
     rm(data.raw.blogs)
     }
 
 # load en_US.news.txt----
-if(file.exists("../data/temp.data/data.news.csv")){
-    sample.news <- read_csv("../data/temp.data/data.news.csv")
+if(file.exists("../data/temp.data/data.news.txt")){
+    sample.news <- read_tsv("../data/temp.data/data.news.txt")
 } else {
     data.raw.news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
                                     skipNul = TRUE)
@@ -76,14 +79,14 @@ if(file.exists("../data/temp.data/data.news.csv")){
                            replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.news,
-            "../data/temp.data/sample.news.csv")
+            "../data/temp.data/sample.news.txt")
     # remove original data
     rm(data.raw.news)
     }
 
 # load en_US.twitter.txt----
-if(file.exists("../data/temp.data/data.twitter.csv")){
-    sample.twitter <- read_csv("../data/temp.data/data.twitter.csv")
+if(file.exists("../data/temp.data/data.twitter.txt")){
+    sample.twitter <- read_tsv("../data/temp.data/data.twitter.txt")
 } else {
     data.raw.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
                                     skipNul = TRUE,
@@ -94,7 +97,7 @@ if(file.exists("../data/temp.data/data.twitter.csv")){
                            replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.twitter,
-            "../data/temp.data/sample.twitter.csv")
+            "../data/temp.data/sample.twitter.txt")
     # remove original data
     rm(data.raw.twitter)
 }
@@ -107,7 +110,7 @@ data.news <- tibble(line = 1:length(sample.news),
 data.twitter <- tibble(line = 1:length(sample.twitter),
                          txt_sample = sample.twitter)
 
-# Tokenize data----
+# Tokenize data to one word per row----
 data.blogs <- unnest_tokens(tbl = data.blogs,
                             output = words,
                             input = txt_sample,
@@ -124,6 +127,39 @@ data.twitter <- unnest_tokens(tbl = data.twitter,
                             token = "words",
                             to_lower = FALSE)
 
+# Tokenize data to two words per row----
+#data.blogs <- unnest_tokens(tbl = data.blogs,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
+#data.news <- unnest_tokens(tbl = data.news,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
+#data.twitter <- unnest_tokens(tbl = data.twitter,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
+
+# Tokenize data to three words per row----
+#data.blogs <- unnest_tokens(tbl = data.blogs,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
+#data.news <- unnest_tokens(tbl = data.news,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
+#data.twitter <- unnest_tokens(tbl = data.twitter,
+#                            output = words,
+#                            input = txt_sample,
+#                            token = "words",
+#                            to_lower = FALSE)
 ```                            
 # ##############################################################################
 
@@ -166,6 +202,45 @@ str_which(data.raw.twitter, "A computer once beat me at chess, but it was no mat
 ```
 #.
 # Exploration
+## Expectations in data:
+- expecting words to be spelled correctly... most likely not true
+- expecting tokenizer to correctly split words and drop punctuation... mostlikely not true
+- 
+```{r distribution of line lengths in blogs}
+nwords.data.blogs <- data.blogs%>%
+    group_by(line) %>% 
+    summarise(nwords = n()) %>% 
+    mutate(source = "blogs")
+
+nwords.data.news <- data.news%>%
+    group_by(line) %>% 
+    summarise(nwords = n()) %>% 
+    mutate(source = "news")
+
+nwords.data.twitter <- data.twitter%>%
+    group_by(line) %>% 
+    summarise(nwords = n()) %>% 
+    mutate(source = "twitter")
+
+nwords.data <- rbind(nwords.data.blogs,
+                     nwords.data.news,
+                     nwords.data.twitter)
+
+ggplot(nwords.data, aes(x = nwords, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)+
+    geom_rug()+
+    scale_x_log10()
+    
+```
+```{r distribution of line lengths in news}
+data.news %>% 
+    group_by(line) %>% 
+    summarise(nwords = n()) %>% 
+    ggplot(aes(x = nwords))+
+    geom_histogram(bins = 100)+
+    scale_x_log10()
+```
 ```{r most and common words}
 most.common.blog <- data.blogs %>%
     count(words, sort = TRUE) %>% 
