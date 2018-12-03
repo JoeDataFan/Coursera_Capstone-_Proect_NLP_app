@@ -206,33 +206,26 @@ str_which(data.raw.twitter, "A computer once beat me at chess, but it was no mat
 - expecting words to be spelled correctly... most likely not true
 - expecting tokenizer to correctly split words and drop punctuation... mostlikely not true
 - 
-```{r distribution of line lengths in blogs}
-nwords.data.blogs <- data.blogs%>%
+
+```{r dist of line lengths using purrr}
+nwords <- function(x, y){
+    x%>%
     group_by(line) %>% 
     summarise(nwords = n()) %>% 
-    mutate(source = "blogs")
+    mutate(source = y)
+}
 
-nwords.data.news <- data.news%>%
-    group_by(line) %>% 
-    summarise(nwords = n()) %>% 
-    mutate(source = "news")
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter")
 
-nwords.data.twitter <- data.twitter%>%
-    group_by(line) %>% 
-    summarise(nwords = n()) %>% 
-    mutate(source = "twitter")
-
-nwords.data <- rbind(nwords.data.blogs,
-                     nwords.data.news,
-                     nwords.data.twitter)
-
-ggplot(nwords.data, aes(x = nwords, fill = source))+
+map2_df(.x = data.list, .y = sources, .f = nwords) %>% 
+    ggplot(aes(x = nwords, fill = source))+
     facet_grid(source ~ .)+
     geom_histogram(bins = 100)+
     geom_rug()+
     scale_x_log10()
-    
 ```
+
 ```{r distribution of line lengths in news}
 data.news %>% 
     group_by(line) %>% 
