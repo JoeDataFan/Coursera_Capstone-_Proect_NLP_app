@@ -25,15 +25,14 @@ library(stringr)
 library(purrr)
 library(quanteda)
 library(tm)
+library(hunspell)
 
 
 # Themes----
 
 
 # Fucntions-----
-cleanFiles<-function(file,newfile){
-    writeLines(iconv(readLines(file,skipNul = TRUE)),newfile)
-}
+
 
 # Load data----
 # download and unzip data folder
@@ -47,7 +46,7 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 
 
 # Load then sample a portion of data then save to file
-sample.size <- 0.25 # proportion of orignal text data to save to file
+sample.size <- 0.1 # proportion of orignal text data to save to file
 
 # load en_US.blogs.txt----
 if(file.exists("../data/temp.data/data.blogs.txt")){
@@ -205,7 +204,57 @@ str_which(data.raw.twitter, "A computer once beat me at chess, but it was no mat
 ## Expectations in data:
 - expecting words to be spelled correctly... most likely not true
 - expecting tokenizer to correctly split words and drop punctuation... mostlikely not true
-- 
+
+## Tasks to accomplish
+
+- Exploratory analysis - perform a thorough exploratory analysis of the data, understanding the distribution of words and relationship between the words in the corpora.
+- Understand frequencies of words and word pairs - build figures and tables to understand variation in the frequencies of words and word pairs in the data.
+
+## Questions to consider
+- Some words are more frequent than others - what are the distributions of word frequencies?
+- What are the frequencies of 2-grams and 3-grams in the dataset?
+- How many unique words do you need in a frequency sorted dictionary to cover 50% of all word instances in the language? 90%?
+- How do you evaluate how many of the words come from foreign languages?
+- Can you think of a way to increase the coverage -- identifying words that may not be in the corpora or using a smaller number of words in the dictionary to cover the same number of phrases?
+```{r missing data?}
+data.list <- list(data.blogs, data.news, data.twitter)
+
+map(data.list, summary)
+```
+```{r proportion miss spelled words?}
+
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+map2_df(.x = data.list,
+        .y = sources,
+        .f = function(x, y){
+            x %>% mutate(correct.spelling = hunspell_check(words)) %>% 
+                summarise(prop.spelling.errors = (dim(x)[1] - sum(correct.spelling))/dim(x)[1]) %>% 
+                mutate(source = y)
+            })
+```
+```{r what are the most common miss spelled words}
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+most_com_miss_spell <- function(x, y){
+    x %>%
+        mutate(correct.spelling = hunspell_check(words)) %>%
+        filter(correct.spelling == FALSE) %>%
+        count(words, sort = TRUE) %>% 
+        mutate(source = y) %>% 
+        head(n = 10)
+    }
+
+map2_df(.x = data.list,
+        .y = sources,
+        .f = most_com_miss_spell) %>% 
+    ggplot(aes(x = words, y = n, fill = source))+
+    geom_col(position = position_dodge())+
+    facet_wrap(~ source, nrow = 1)+
+    coord_flip()
+```
 
 ```{r dist of line lengths using purrr}
 nwords <- function(x, y){
@@ -234,28 +283,43 @@ data.news %>%
     geom_histogram(bins = 100)+
     scale_x_log10()
 ```
-```{r most and common words}
-most.common.blog <- data.blogs %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100) %>% 
-    select(words) %>% 
-    rename(blog.words = words)
-   
-most.common.news <- data.news %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100)%>% 
-    select(words)%>% 
-    rename(news.words = words)
+```{r distribution of word occurances}
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter")
 
-most.common.twitter <- data.twitter %>%
-    count(words, sort = TRUE) %>% 
-    head(n = 100)%>% 
-    select(words)%>% 
-    rename(twitter.words = words)
-
-most.common.words <- bind_cols(most.common.blog, most.common.news, most.common.twitter)
+most_common_words <- function(x, y){
+    x %>%
+        count(words, sort = TRUE) %>%
+        mutate(source = y)
+    }
+        
+map2_df(.x = data.list, .y = sources, .f = most_common_words)%>% 
+    ggplot(aes(x = n, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)
+    
 
 ```
+```{r distribution of word occurances log scale x and y}
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter")
+
+most_common_words <- function(x, y){
+    x %>%
+        count(words, sort = TRUE) %>%
+        mutate(source = y)
+    }
+        
+map2_df(.x = data.list, .y = sources, .f = most_common_words)%>% 
+    ggplot(aes(x = n, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)+
+    #geom_rug()+
+    scale_x_log10()+
+    scale_y_log10()
+
+```
+
 ```{r bad words}
 unique(data.blogs$words)[unique(data.blogs$words) %in% c("fuck", "shit", "pussy")]
 ```
