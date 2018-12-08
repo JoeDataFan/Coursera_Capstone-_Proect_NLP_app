@@ -3,6 +3,8 @@ title: "Getting_n_cleaning_data"
 author: "Joe Rubash"
 date: "November 28, 2018"
 output: html_document
+editor_options: 
+  chunk_output_type: inline
 ---
 
 # Todo:
@@ -19,6 +21,7 @@ rm(list = ls())
 
 # Libraries----
 library(tidyverse)
+library(forcats)
 library(readr)
 library(tidytext)
 library(stringr)
@@ -28,13 +31,14 @@ library(tm)
 library(hunspell)
 library(pacman)
 p_load("cld2")
+p_load("cld3")
 
 
 # Themes----
 
 
 # Fucntions-----
-
+getwd()
 
 # Load data----
 # download and unzip data folder
@@ -120,32 +124,46 @@ data.list <- list(data.blogs, data.news, data.twitter)
 sources <- c("blogs", "news", "twitter")
 
 # Tokenize to individual words
-token_1_words <- function(x, y){
+unigram_tokens <- function(x, y){
     df <- unnest_tokens(tbl = x,
                         output = words,
                         input = txt_sample,
                         token = "words",
-                        to_lower = FALSE)
-    df.names <- paste("data.one.words", y, sep = ".")
+                        to_lower = TRUE)
+    df.names <- paste("data.unigram", y, sep = ".")
     assign(df.names, df, envir = .GlobalEnv)
     }
 
-map2(.x = data.list, .y = sources, .f = token_1_words)
+map2(.x = data.list, .y = sources, .f = unigram_tokens)
 
 
 # Tokenize to two word groups
-token_2_words <- function(x, y){
+bigram_tokens <- function(x, y){
     df <- unnest_tokens(tbl = x,
                         output = words,
                         input = txt_sample,
                         token = "ngrams",
                         n = 2,
-                        to_lower = FALSE)
-    df.names <- paste("data.two.words", y, sep = ".")
+                        to_lower = TRUE)
+    df.names <- paste("data.bigram", y, sep = ".")
     assign(df.names, df, envir = .GlobalEnv)
     }
 
-map2(.x = data.list, .y = sources, .f = token_2_words)
+map2(.x = data.list, .y = sources, .f = bigram_tokens)
+
+# Tokenize to three word groups
+trigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 3,
+                        to_lower = TRUE)
+    df.names <- paste("data.trigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = trigram_tokens)
  
 ```                            
 # ##############################################################################
@@ -211,7 +229,7 @@ map(data.list, summary)
 ```
 ```{r proportion miss spelled words?}
 
-data.token.1.list <- list(data.one.words.blogs, data.one.words.news, data.one.words.twitter)
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
 map2_df(.x = data.token.1.list,
@@ -224,7 +242,7 @@ map2_df(.x = data.token.1.list,
 ```
 ```{r proportion miss spelled words not english?}
 
-data.token.1.list <- list(data.one.words.blogs, data.one.words.news, data.one.words.twitter)
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
 map2_df(.x = data.token.1.list,
@@ -232,8 +250,9 @@ map2_df(.x = data.token.1.list,
         .f = function(x, y){
             length.data <- dim(x)[1]
             
-            miss.spell.en <- x %>% mutate(correct.spelling = hunspell_check(words),
-                                          lang = detect_language(words)) %>%
+            miss.spell.en <- x %>%
+                mutate(correct.spelling = hunspell_check(words),
+                       lang = detect_language(words)) %>%
                 filter(correct.spelling == FALSE &
                            lang != "en") %>% 
                 summarise(n = n(),
@@ -242,7 +261,7 @@ map2_df(.x = data.token.1.list,
             })
 ```
 ```{r what are the most common miss spelled words}
-data.token.1.list <- list(data.one.words.blogs, data.one.words.news, data.one.words.twitter)
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
 most_miss_spell <- function(x, y){
@@ -257,14 +276,14 @@ most_miss_spell <- function(x, y){
 map2_df(.x = data.token.1.list,
         .y = sources,
         .f = most_miss_spell) %>%
-    ggplot(aes(x = words, y = n, fill = source))+
+    ggplot(aes(x = fct_reorder(words, n), y = n, fill = source))+
     geom_col(position = position_dodge())+
-    facet_wrap(~ source, nrow = 1)+
+    facet_wrap(~ source, scales = "free_y")+
     coord_flip()
 
 ```
 ```{r what are the most common miss spelled english words}
-data.token.1.list <- list(data.one.words.blogs, data.one.words.news, data.one.words.twitter)
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
 most_miss_spell_english <- function(x, y){
@@ -288,6 +307,34 @@ map2_df(.x = data.token.1.list,
 
 #test <- most_com_miss_spell(data.blogs, "blogs")
 ```
+```{r proportion of languages}
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+prop_lang <- function(x, y){
+    x %>% 
+        mutate(lang = detect_language(words)) %>% 
+        group_by(lang) %>% 
+        summarise(n = n()) %>% 
+        mutate(freq = n / sum(n),
+               source = y) %>% 
+        arrange(desc(freq)) %>% 
+        top_n(freq, n = 5)
+}
+
+windows()
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = prop_lang) %>% 
+    ggplot(aes(x = lang,
+               y = freq,
+               fill = source))+
+    geom_col(position = position_dodge())+
+    coord_flip()+
+    facet_wrap(~ source, scales = "free")
+
+```
+
 ```{r dist of line lengths using purrr}
 nwords <- function(x, y){
     x%>%
@@ -344,28 +391,108 @@ map2_df(.x = data.list, .y = sources, .f = most_common_words)%>%
 
 ```
 
-```{r bad words}
-unique(data.blogs$words)[unique(data.blogs$words) %in% c("fuck", "shit", "pussy")]
-```
-```{r two word frequency dist}
-top.first.words <- data.two.words.blogs %>% 
-    separate(words, " ", into = c("first.word", "second.word")) %>% 
-    count(first.word, sort = TRUE) %>% 
-    head(n = 6)
+```{r two word frequency dist in blogs}
+# determine top 10 words
+top.first.words.blogs <- most_common_words(data.unigram.blogs, "blogs") %>% 
+    top_n(n, n=10)
+    
 
-data.two.words.blogs %>% 
+most.freq.2nd.word <- data.bigram.blogs %>% 
     separate(words, " ", into = c("first.word", "second.word")) %>% 
     group_by(first.word) %>% 
-    count(first.word, second.word, sort = TRUE) %>% 
-    top_n(n, n = 5)
-    
+    count(second.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(second.word, first.word, sep = "_")) %>%
+    filter(first.word %in% top.first.words.blogs$words) %>% 
+    ungroup() %>% 
+    arrange(first.word, n) %>% 
+    mutate(.r = row_number())
 
-filter(first.word %in% top.first.words$first.word) %>% 
-    ggplot(aes(x = second.word, fill = first.word))+
-    geom_histogram()+
-    facet_wrap(first.word~.)+
-    scale_x_log10()
-    
+#windows()
+    ggplot(data = most.freq.2nd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.word))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.2nd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.2nd.word$second.word) +
+    coord_flip()+
+    facet_wrap(~ first.word, scales = "free")
 
 ```
+```{r two word frequency dist in news}
+# determine top 10 words
+top.first.words.news <- most_common_words(data.unigram.news, "news") %>% 
+    top_n(n, n=10)
+    
 
+most.freq.2nd.word <- data.bigram.news %>% 
+    separate(words, " ", into = c("first.word", "second.word")) %>% 
+    group_by(first.word) %>% 
+    count(second.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(second.word, first.word, sep = "_")) %>%
+    filter(first.word %in% top.first.words.news$words) %>% 
+    ungroup() %>% 
+    arrange(first.word, n) %>% 
+    mutate(.r = row_number())
+
+#windows()
+    ggplot(data = most.freq.2nd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.word))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.2nd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.2nd.word$second.word) +
+    coord_flip()+
+    facet_wrap(~ first.word, scales = "free")
+
+```
+```{r three word frequency dist in blogs}
+top.first.2.words.blogs <- data.bigram.blogs %>% 
+    count(words, sort = TRUE) %>% 
+    top_n(n, n=10)
+
+most.freq.3rd.word <- data.trigram.blogs %>% 
+    mutate(first.2.words = str_remove(words, " [[:alpha:]]*$"),
+           third.word = str_extract(words, " [[:alpha:]]*$")%>% 
+               str_remove(., " "))  %>% 
+    group_by(first.2.words) %>% 
+    count(third.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(third.word, first.2.words, sep = "_")) %>%
+    filter(first.2.words %in% top.first.2.words.blogs$words) %>% 
+    ungroup() %>% 
+    arrange(first.2.words, n) %>% 
+    mutate(.r = row_number())
+
+windows()
+    ggplot(data = most.freq.3rd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.2.words))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.3rd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.3rd.word$third.word) +
+    coord_flip()+
+    facet_wrap(~ first.2.words, scales = "free")
+
+    
+    sub(df1$city, pattern = " [[:alpha:]]*$", replacement = "")
+    
+x <- data.frame(line = 1:3, text = c("given this set", "testing that set", "another test two"))    
+test <- x %>% 
+    mutate(first.2.words = str_remove(text, " [[:alpha:]]*$"),
+           third.word = str_extract(text, " [[:alpha:]]*$")%>% 
+               str_remove(., " ")
+           ) 
+    
+print(test$first.2.words)
+print(test$third.word)
+
+
+```
