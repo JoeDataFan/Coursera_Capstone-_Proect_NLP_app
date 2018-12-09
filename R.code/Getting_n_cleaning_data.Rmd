@@ -14,7 +14,10 @@ editor_options:
 - consider changing sample data back to text file then read text... may be faster
 
 # ##############################################################################
-```{r setup, include=FALSE}
+```{r setup - loading and formating data}
+# global settings for chunks
+knitr::opts_chunk$set(echo=FALSE)
+
 # clear environment
 rm(list = ls())
 
@@ -23,6 +26,7 @@ rm(list = ls())
 library(tidyverse)
 library(forcats)
 library(readr)
+library(scales)
 library(tidytext)
 library(stringr)
 library(purrr)
@@ -52,7 +56,7 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 
 
 # Load then sample a portion of data then save to file
-sample.size <- 0.1 # proportion of orignal text data to save to file
+sample.size <- 0.05 # proportion of orignal text data to save to file
 
 # load en_US.blogs.txt----
 if(file.exists("../data/temp.data/data.blogs.txt")){
@@ -68,8 +72,6 @@ if(file.exists("../data/temp.data/data.blogs.txt")){
     # write the sample to txt file in "output"
     writeLines(sample.blogs,
             "../data/temp.data/sample.blogs.txt")
-    # remove original data
-    rm(data.raw.blogs)
     }
 
 # load en_US.news.txt----
@@ -85,8 +87,6 @@ if(file.exists("../data/temp.data/data.news.txt")){
     # write the sample to txt file in "output"
     writeLines(sample.news,
             "../data/temp.data/sample.news.txt")
-    # remove original data
-    rm(data.raw.news)
     }
 
 # load en_US.twitter.txt----
@@ -103,8 +103,6 @@ if(file.exists("../data/temp.data/data.twitter.txt")){
     # write the sample to txt file in "output"
     writeLines(sample.twitter,
             "../data/temp.data/sample.twitter.txt")
-    # remove original data
-    rm(data.raw.twitter)
 }
 
 # Add line variable to data----
@@ -123,47 +121,47 @@ data.list <- list(data.blogs, data.news, data.twitter)
 # list of names for tokenized to words data frames
 sources <- c("blogs", "news", "twitter")
 
-# Tokenize to individual words
-unigram_tokens <- function(x, y){
-    df <- unnest_tokens(tbl = x,
-                        output = words,
-                        input = txt_sample,
-                        token = "words",
-                        to_lower = TRUE)
-    df.names <- paste("data.unigram", y, sep = ".")
-    assign(df.names, df, envir = .GlobalEnv)
-    }
-
-map2(.x = data.list, .y = sources, .f = unigram_tokens)
-
-
-# Tokenize to two word groups
-bigram_tokens <- function(x, y){
-    df <- unnest_tokens(tbl = x,
-                        output = words,
-                        input = txt_sample,
-                        token = "ngrams",
-                        n = 2,
-                        to_lower = TRUE)
-    df.names <- paste("data.bigram", y, sep = ".")
-    assign(df.names, df, envir = .GlobalEnv)
-    }
-
-map2(.x = data.list, .y = sources, .f = bigram_tokens)
-
-# Tokenize to three word groups
-trigram_tokens <- function(x, y){
-    df <- unnest_tokens(tbl = x,
-                        output = words,
-                        input = txt_sample,
-                        token = "ngrams",
-                        n = 3,
-                        to_lower = TRUE)
-    df.names <- paste("data.trigram", y, sep = ".")
-    assign(df.names, df, envir = .GlobalEnv)
-    }
-
-map2(.x = data.list, .y = sources, .f = trigram_tokens)
+## Tokenize to individual words
+#unigram_tokens <- function(x, y){
+#    df <- unnest_tokens(tbl = x,
+#                        output = words,
+#                        input = txt_sample,
+#                        token = "words",
+#                        to_lower = TRUE)
+#    df.names <- paste("data.unigram", y, sep = ".")
+#    assign(df.names, df, envir = .GlobalEnv)
+#    }
+#
+#map2(.x = data.list, .y = sources, .f = unigram_tokens)
+#
+#
+## Tokenize to two word groups
+#bigram_tokens <- function(x, y){
+#    df <- unnest_tokens(tbl = x,
+#                        output = words,
+#                        input = txt_sample,
+#                        token = "ngrams",
+#                        n = 2,
+#                        to_lower = TRUE)
+#    df.names <- paste("data.bigram", y, sep = ".")
+#    assign(df.names, df, envir = .GlobalEnv)
+#    }
+#
+#map2(.x = data.list, .y = sources, .f = bigram_tokens)
+#
+## Tokenize to three word groups
+#trigram_tokens <- function(x, y){
+#    df <- unnest_tokens(tbl = x,
+#                        output = words,
+#                        input = txt_sample,
+#                        token = "ngrams",
+#                        n = 3,
+#                        to_lower = TRUE)
+#    df.names <- paste("data.trigram", y, sep = ".")
+#    assign(df.names, df, envir = .GlobalEnv)
+#    }
+#
+#map2(.x = data.list, .y = sources, .f = trigram_tokens)
  
 ```                            
 # ##############################################################################
@@ -171,39 +169,45 @@ map2(.x = data.list, .y = sources, .f = trigram_tokens)
 # Quiz week 1
 ```{r longest lines}
 # longest lines in data sets
-map_dbl(data.raw.blogs, nchar) %>% 
-    max()
-
-map_dbl(data.raw.news, nchar) %>% 
-    max()
-
-map_dbl(data.raw.twitter, nchar) %>% 
-    max()
-
+longest_lines <- function(x, y){
+    x %>% 
+        mutate(char.in.line = nchar(txt_sample))%>% 
+        mutate(source = y) %>%
+        arrange(desc(char.in.line)) %>% 
+        head(n = 1)
+}
+map2_df(.x = data.list,
+       .y = sources,
+       .f = longest_lines) %>%
+    select(source, char.in.line)
 ```
 ```{r love vs hate}
 lines_love <- data.twitter %>% 
-    mutate(love = str_detect(words, "love"))%>%
-    group_by(line) %>%
+    mutate(love = str_detect(txt_sample, "love"))%>%
     summarise(love_by_line = sum(love)) %>% 
     filter(love_by_line != 0)
 
 lines_hate <- data.twitter %>% 
-    mutate(hate = str_detect(words, "hate"))%>%
-    group_by(line) %>%
+    mutate(hate = str_detect(txt_sample, "hate"))%>%
     summarise(hate_by_line = sum(hate)) %>% 
     filter(hate_by_line != 0)
 
 
-dim(lines_love)[1] / dim(lines_hate)[1]
+lines_love$love_by_line / lines_hate$hate_by_line
+
 ```
 ```{r biostats tweet}
 data.raw.twitter[str_which(data.raw.twitter, " biostats ")]
+
 ```
 
 ```{r number tweets matching phrase}
-str_which(data.raw.twitter, "A computer once beat me at chess, but it was no match for me at kickboxing") %>% 
+str_which(data.raw.twitter,
+          "A computer once beat me at chess, but it was no match for me at kickboxing") %>%
     length()
+
+# remove original data
+rm(data.raw.twitter)
 ```
 #.
 # Exploration
@@ -227,6 +231,21 @@ data.list <- list(data.blogs, data.news, data.twitter)
 
 map(data.list, summary)
 ```
+```{r ---Unigram tokens-------}
+# Tokenize to individual words
+unigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "words",
+                        to_lower = TRUE)
+    df.names <- paste("data.unigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = unigram_tokens)
+```
+
 ```{r proportion miss spelled words?}
 
 data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
@@ -238,9 +257,16 @@ map2_df(.x = data.token.1.list,
             x %>% mutate(correct.spelling = hunspell_check(words)) %>%
                 summarise(prop.spelling.errors = (dim(x)[1] - sum(correct.spelling))/dim(x)[1]) %>% 
                 mutate(source = y)
-            })
+            }) %>% 
+    ggplot(aes(x = source,
+               y = prop.spelling.errors,
+               fill = source))+
+    geom_col(position = "dodge")+
+    scale_y_continuous(labels = percent)+
+    coord_cartesian(ylim = c(0, 1))
+
 ```
-```{r proportion miss spelled words not english?}
+```{r proportion miss spelled not english?}
 
 data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
@@ -260,7 +286,7 @@ map2_df(.x = data.token.1.list,
                 mutate(source = y)
             })
 ```
-```{r what are the most common miss spelled words}
+```{r most common miss spelled words}
 data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
@@ -282,7 +308,7 @@ map2_df(.x = data.token.1.list,
     coord_flip()
 
 ```
-```{r what are the most common miss spelled english words}
+```{r most common miss spelled english}
 data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter") 
 
@@ -300,9 +326,9 @@ most_miss_spell_english <- function(x, y){
 map2_df(.x = data.token.1.list,
         .y = sources,
         .f = most_miss_spell_english) %>%
-    ggplot(aes(x = words, y = n, fill = source))+
+    ggplot(aes(x = fct_reorder(words, n), y = n, fill = source))+
     geom_col(position = position_dodge())+
-    facet_wrap(~ source, nrow = 1)+
+    facet_wrap(~ source,  scales = "free")+
     coord_flip()
 
 #test <- most_com_miss_spell(data.blogs, "blogs")
@@ -371,8 +397,8 @@ map2_df(.x = data.list, .y = sources, .f = most_common_words)%>%
     
 
 ```
-```{r distribution of word occurances log scale x and y}
-data.list <- list(data.blogs, data.news, data.twitter)
+```{r dist of word occurances log scale}
+data.unigram.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter")
 
 most_common_words <- function(x, y){
@@ -381,7 +407,7 @@ most_common_words <- function(x, y){
         mutate(source = y)
     }
         
-map2_df(.x = data.list, .y = sources, .f = most_common_words)%>% 
+map2_df(.x = data.unigram.list, .y = sources, .f = most_common_words)%>% 
     ggplot(aes(x = n, fill = source))+
     facet_grid(source ~ .)+
     geom_histogram(bins = 100)+
@@ -390,12 +416,30 @@ map2_df(.x = data.list, .y = sources, .f = most_common_words)%>%
     scale_y_log10()
 
 ```
-
-```{r two word frequency dist in blogs}
+```{r ---Bigram tokens--------}
 # determine top 10 words
 top.first.words.blogs <- most_common_words(data.unigram.blogs, "blogs") %>% 
     top_n(n, n=10)
-    
+
+# remove unigram data sets to save memory
+rm(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+
+# Tokenize to two word groups
+bigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 2,
+                        to_lower = TRUE)
+    df.names <- paste("data.bigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = bigram_tokens)
+```
+
+```{r two word frequency dist in blogs}
 
 most.freq.2nd.word <- data.bigram.blogs %>% 
     separate(words, " ", into = c("first.word", "second.word")) %>% 
@@ -422,10 +466,6 @@ most.freq.2nd.word <- data.bigram.blogs %>%
 
 ```
 ```{r two word frequency dist in news}
-# determine top 10 words
-top.first.words.news <- most_common_words(data.unigram.news, "news") %>% 
-    top_n(n, n=10)
-    
 
 most.freq.2nd.word <- data.bigram.news %>% 
     separate(words, " ", into = c("first.word", "second.word")) %>% 
@@ -451,10 +491,30 @@ most.freq.2nd.word <- data.bigram.news %>%
     facet_wrap(~ first.word, scales = "free")
 
 ```
-```{r three word frequency dist in blogs}
+```{r ---Trigram tokens--------}
+# create list of top ten two word combinations
 top.first.2.words.blogs <- data.bigram.blogs %>% 
     count(words, sort = TRUE) %>% 
     top_n(n, n=10)
+
+# remove bigram token data sets to save memory
+rm(data.bigram.blogs, data.bigram.news, data.bigram.twitter)
+
+# Tokenize to three word groups
+trigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 3,
+                        to_lower = TRUE)
+    df.names <- paste("data.trigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = trigram_tokens)
+```
+```{r three word frequency dist in blogs}
 
 most.freq.3rd.word <- data.trigram.blogs %>% 
     mutate(first.2.words = str_remove(words, " [[:alpha:]]*$"),
@@ -496,3 +556,4 @@ print(test$third.word)
 
 
 ```
+# Plan to model word data to predict next word:
