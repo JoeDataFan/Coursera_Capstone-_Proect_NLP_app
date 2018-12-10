@@ -8,7 +8,13 @@ editor_options:
   chunk_output_type: inline
 ---
 
-### Introduction: 
+### Project goal: 
+The goal of this project is to take a large text corpus and create an app to correctly 
+predict the next word given the previous one, two or three words as supplied by the user. 
+
+### Supplied text data:  
+The text corpus for this project comes from blogs, news feeds and twitter with roughly 
+1 to 2 million lines of text in each. Basic summary statistics for the supplied text data are in the table below.
 
 ```{r setup - loading and formating data, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 # global settings for chunks
@@ -20,10 +26,6 @@ rm(list = ls())
 # required libraries
 source("./Loading_cleaning_data.R")
 ```                              
-
-
-## Exploration of data:
-
 ```{r ---Unigram tokens all data---, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 # Add line variable to data----
 all.data.blogs <- tibble(line = 1:length(data.raw.blogs),
@@ -44,51 +46,79 @@ unigram_tokens <- function(x, y){
     assign(df.names, df, envir = .GlobalEnv)
     }
 
+# list of raw data
 raw.data.list <- list(all.data.blogs,
                       all.data.news,
                       all.data.twitter)
+
+# labels for data sources
 sources <- c("blogs",
              "news",
              "twitter")
 
+# apply tokenizing function to all data sets then combine
 map2(.x = raw.data.list, .y = sources, .f = unigram_tokens)
 ```
 
 ### Data summary statistics:
 ```{r data summary stats, warning=FALSE, message=FALSE}
+# list of raw data
 raw.data.list <- list(data.raw.blogs,
                       data.raw.news,
                       data.raw.twitter)
+
+# labels for data sources
 sources <- c("blogs",
              "news",
              "twitter")
+
+# list of tokenized data
 all.data.unigram <- list(all.data.unigram.blogs,
                          all.data.unigram.news,
                          all.data.unigram.twitter)
 
+# function create summary stats
 raw_data_summary_stats <- function(x, y, z){
-    num.lines <- length(x)
-    data.size <- object.size(x) %>% 
+    number_of_lines <- length(x)
+    number_of_words <- nrow(z)
+    data_size_Mb <- object.size(x) %>% 
         as.character() %>% 
         as.numeric()/1000000
-    unique.words <- z %>% 
+    unique_words <- z %>% 
         count(words, sort = TRUE) %>% 
         nrow()
     data.source <- y
     df <- data.frame(data.source,
-                     data.size,
-                     num.lines,
-                     unique.words)
+                     data_size_Mb,
+                     number_of_lines,
+                     number_of_words,
+                     unique_words)
 }
 
+# loop of data frames and apply summary stats function then combine
 pmap_df(.l = list(raw.data.list,
                   sources,
                   all.data.unigram),
         .f = raw_data_summary_stats) %>% 
     kable()
+
+# removed data sets not needed for remainder of report
+rm(all.data.unigram.blogs,
+   all.data.unigram.news,
+   all.data.unigram.twitter)
 ```
+
+The table above shows that the text files are fairly large. Even simple explorations of the raw data has been slow due to its size. To reduce computational time I have chosen to subset only 5% of each data set relying on basic statistics; this small randomly sampled data set should still represent the population as a whole. 
 ```{r ---Unigram tokens---, include=FALSE}
 # Tokenize to individual words
+
+# list of data.frames to tokenize
+data.list <- list(data.blogs, data.news, data.twitter)
+
+# names for data sources
+sources <- c("blogs", "news", "twitter")
+
+# tokenizing function
 unigram_tokens <- function(x, y){
     df <- unnest_tokens(tbl = x,
                         output = words,
@@ -99,38 +129,54 @@ unigram_tokens <- function(x, y){
     assign(df.names, df, envir = .GlobalEnv)
     }
 
+# loop over data.frames, tokenize then combine
 map2(.x = data.list, .y = sources, .f = unigram_tokens)
 ```
 
-### Distributions of words occurences for each data set 
-```{r dist of word occurances log scale, out.width = '100%' }
+### Distributions of word occurence for each data set 
+```{r dist of word occurances log scale, warning=FALSE, fig.width= 10, fig.asp= 0.6}
+# list of tokenized data.frames
 data.unigram.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
 sources <- c("blogs", "news", "twitter")
 
+# function to find most common words
 most_common_words <- function(x, y){
     x %>%
         count(words, sort = TRUE) %>%
         mutate(source = y)
-    }
-        
+}
+
+# loop over data.frames, determine most common words then combine and plot
 map2_df(.x = data.unigram.list, .y = sources, .f = most_common_words)%>% 
     ggplot(aes(x = n, fill = source))+
     facet_grid(source ~ .)+
     geom_histogram(bins = 100)+
     #geom_rug()+
     scale_x_log10()+
-    scale_y_log10()
+    #scale_y_log10()+
+    labs(x = "Ranked words",
+         y = "Occurrence of word",
+         subtitle = "Frequency of words are ordered from most frequent to the left
+to least frequent to the right. The x axis is on a logarithmic scale")
 
 ```
 
+The distributions above show that word occurrence in the text data appeared to be logarithmic. There were relatively few words used often and many words used less often. Text data from blogs, news feeds and twitter showed similar distributions. 
+
+To more clearly illustrate this attribute the data was viewed in another way. The plot below shows what portion of unique words is needed to cover a specific portion of the data. Stated another way the percentage of the data set (y-axis) that specific percentages of all unique words (x-axis) will cover. 
+
 ### How many unique words are needed to represent 50 and 90% of the data?
-```{r cummulative most freq words, out.width = '100%'}
+```{r cummulative most freq words, fig.width= 10, fig.asp= 0.6}
 # determine the relationship of number of unique words to percent of data set they
 # represent
+
+# list of tokenized data.frames
 data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+
+# labels for data sources
 sources <- c("blogs", "news", "twitter")
 
-
+# function to find percent word coverage
 perc_unique_words_cover <- function(x, y){
     x %>% 
     count(words, sort = TRUE) %>%
@@ -141,6 +187,7 @@ perc_unique_words_cover <- function(x, y){
            source = y)
     }
 
+# loop over data.frames, combine and plot
 map2_df(.x = data.token.1.list,
         .y = sources,
         .f = perc_unique_words_cover) %>% 
@@ -151,8 +198,13 @@ map2_df(.x = data.token.1.list,
     geom_hline(yintercept = c(0.5, 0.9), linetype = 2)+
     scale_y_continuous(labels = percent)+
     scale_x_continuous(labels = percent)+
-    facet_grid(. ~ source)
+    facet_grid(. ~ source)+
+    labs(x = "% of unique words",
+         y = "% of total data")
 ```
+
+This plots shows that roughly 13% of unique words in the data will represent 90% of the all words in the data set. This aspect of the data will help to reduce complexity of the model.
+
 
 ```{r ---Bigram tokens---, include=FALSE}
 # determine top 10 words
@@ -174,13 +226,20 @@ bigram_tokens <- function(x, y){
     assign(df.names, df, envir = .GlobalEnv)
     }
 
+# list of data.frames to tokenize
+data.list <- list(data.blogs, data.news, data.twitter)
+
+# names for data sources
+sources <- c("blogs", "news", "twitter")
+
+# loop over data.frames, apply bigram function
 map2(.x = data.list, .y = sources, .f = bigram_tokens)
 ```
 
 
 ### Most common second word given previous word
-```{r two word frequency dist in blogs, out.width = '100%'}
-
+```{r two word frequency dist in blogs, fig.width= 10, fig.asp= 0.6}
+# determine frequency of 2nd word given the 1st
 most.freq.2nd.word <- data.bigram.blogs %>% 
     separate(words, " ", into = c("first.word", "second.word")) %>% 
     group_by(first.word) %>% 
@@ -192,6 +251,7 @@ most.freq.2nd.word <- data.bigram.blogs %>%
     arrange(first.word, n) %>% 
     mutate(.r = row_number())
 
+# plot 2nd word freq data
 #windows()
     ggplot(data = most.freq.2nd.word,
            aes(x = .r,
@@ -201,17 +261,31 @@ most.freq.2nd.word <- data.bigram.blogs %>%
     scale_x_continuous(  # This handles replacement of .r for x
     breaks = most.freq.2nd.word$.r,     # notice need to reuse data frame
     labels = most.freq.2nd.word$second.word) +
+    labs(x = "Second word",
+         y = "Occurrence of word")+
     coord_flip()+
-    facet_wrap(~ first.word, scales = "free")
+    facet_wrap(~ first.word, scales = "free")+
+    
+    guides(fill = guide_legend(title = "First word"))
 
 ```
 
-### Plan to model word data to predict next word:  
-- Sample a portion of data   
-- Tokenize to bigram and perhaps trigram   
+This chart illustrates the beginning of a predictive model. Given the first word we can see what the most often used second word will be.
+
+### Plan to create next word prediction model:  
+- Sample a portion of each data source  
+- Combine data sources so as to best represent the language 
+- Tokenize to bigram and perhaps trigram (removes punctuation, converts to lower case)   
+- introduce a case to allow prediction of unknowns  
+- split into train and test data sets  
 - Convert to document term matrix   
 - Use Randomforest to generate predictive model   
-### Plan for shiny app:   
-- include input field for user to type one word string   
+- use cross validation within modeling process to refine model  
+- use test data set to evaluate final model
+
+### Plan for shiny app:  
+- Start app by creating model  
+- include input field for user to type one word, two word or three word strings 
 - button to run prediction   
-- output will be a word cloud with most likely word as largest with other options as smaller surrounding  
+- take user input and convert to lower case then run through model
+- output could be a word cloud with most likely word as largest with other options as smaller surrounding  
