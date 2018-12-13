@@ -1,0 +1,106 @@
+---
+title: "Next_word_pred_model"
+author: "Joe Rubash"
+date: "December 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# required libraries
+library(quanteda)
+library(data.table)
+
+```
+
+# plan of attack ("make it work", "make it right", "make it fast")
+## Stage one - make a simple model using calculated frequencies from n-grams
+1. read in data and make a corpus with all sources
+2. to start out sample a small portion of this corpus
+3. use qunteda package to create unigram (to lower case, strip punc, remove extra 
+white space. etc)
+4. create a dictionary to assign integer to unique words in unigram
+5. build unigram, bigram and trigram document term matrices
+6. split ngrams to give previous word(s) and next word (to predict)
+7. calc frequencies
+8. to colsum of frequencies to
+9. create backoff method to start with highest order n-gram then move to lowest
+order n-gram if no solution found
+
+
+## stage two use smoothing to improve prediction and various methods to spee up
+8. figure out how to alter frequencies to predict unkowns
+9. su
+
+```{r}
+# Load data----
+# download and unzip data folder
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+# Load then sample a portion of data then save to file
+sample.size <- 0.05 # proportion of orignal text data to save to file
+
+# load en_US.blogs.txt----
+if(file.exists("../data/temp.data/data.blogs.txt")){
+    sample.blogs <- read_tsv("../data/temp.data/data.blogs.txt")
+} else {
+    data.raw.blogs <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                                skipNul = TRUE,
+                                encoding="UTF-8")
+    # create a sample
+    sample.blogs <- sample(data.raw.blogs,
+                           size = sample.size * length(data.raw.blogs),
+                           replace = FALSE)
+    # write the sample to txt file in "output"
+    writeLines(sample.blogs,
+               "../data/temp.data/sample.blogs.txt")
+}
+
+# load en_US.news.txt----
+if(file.exists("../data/temp.data/data.news.txt")){
+    sample.news <- read_tsv("../data/temp.data/data.news.txt")
+} else {
+    data.raw.news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+                               skipNul = TRUE)
+    # create a sample
+    sample.news <- sample(data.raw.news,
+                          size = sample.size * length(data.raw.news),
+                          replace = FALSE)
+    # write the sample to txt file in "output"
+    writeLines(sample.news,
+               "../data/temp.data/sample.news.txt")
+}
+
+# load en_US.twitter.txt----
+if(file.exists("../data/temp.data/data.twitter.txt")){
+    sample.twitter <- read_tsv("../data/temp.data/data.twitter.txt")
+} else {
+    data.raw.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                                  skipNul = TRUE,
+                                  encoding="UTF-8")
+    # create a sample
+    sample.twitter <- sample(data.raw.twitter,
+                             size = sample.size * length(data.raw.twitter),
+                             replace = FALSE)
+    # write the sample to txt file in "output"
+    writeLines(sample.twitter,
+               "../data/temp.data/sample.twitter.txt")
+}
+
+# Add line variable to data----
+data.blogs <- tibble(line = 1:length(sample.blogs),
+                     txt_sample = sample.blogs)
+data.news <- tibble(line = 1:length(sample.news),
+                    txt_sample = sample.news)
+data.twitter <- tibble(line = 1:length(sample.twitter),
+                       txt_sample = sample.twitter)
+
+```
+
