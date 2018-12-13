@@ -6,6 +6,7 @@ rm(list = ls())
 library(tidyverse)
 library(forcats)
 library(readr)
+library(readtext)
 library(scales)
 library(tidytext)
 library(stringr)
@@ -25,6 +26,7 @@ library(knitr)
 # Fucntions-----
 getwd()
 
+
 # Load data----
 # download and unzip data folder
 if(!dir.exists("../data/Coursera-SwiftKey/")){
@@ -34,7 +36,6 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     unzip(temp, exdir = "../data/Coursera-SwiftKey")
     rm(temp)
 }
-
 
 # Load then sample a portion of data then save to file
 sample.size <- 0.05 # proportion of orignal text data to save to file
