@@ -29,11 +29,11 @@ getwd()
 
 # Load data----
 # download and unzip data folder
-if(!dir.exists("../data/Coursera-SwiftKey/")){
+if(!dir.exists("./data/Coursera-SwiftKey/")){
     file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
     temp <- tempfile()
     download.file(file.url, temp, mode = "wb")
-    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    unzip(temp, exdir = "./data/Coursera-SwiftKey")
     rm(temp)
 }
 
@@ -41,10 +41,10 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 sample.size <- 0.05 # proportion of orignal text data to save to file
 
 # load en_US.blogs.txt----
-if(file.exists("../data/temp.data/data.blogs.txt")){
-    sample.blogs <- read_tsv("../data/temp.data/data.blogs.txt")
+if(file.exists("./data/temp.data/data.blogs.txt")){
+    sample.blogs <- read_tsv("./data/temp.data/data.blogs.txt")
 } else {
-    data.raw.blogs <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+    data.raw.blogs <- readLines("./data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
                                 skipNul = TRUE,
                                 encoding="UTF-8")
     # create a sample
@@ -53,14 +53,14 @@ if(file.exists("../data/temp.data/data.blogs.txt")){
                            replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.blogs,
-               "../data/temp.data/sample.blogs.txt")
+               "./data/temp.data/sample.blogs.txt")
 }
 
 # load en_US.news.txt----
-if(file.exists("../data/temp.data/data.news.txt")){
-    sample.news <- read_tsv("../data/temp.data/data.news.txt")
+if(file.exists("./data/temp.data/data.news.txt")){
+    sample.news <- read_tsv("./data/temp.data/data.news.txt")
 } else {
-    data.raw.news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+    data.raw.news <- readLines(con = file("./data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
                                skipNul = TRUE)
     # create a sample
     sample.news <- sample(data.raw.news,
@@ -68,14 +68,14 @@ if(file.exists("../data/temp.data/data.news.txt")){
                           replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.news,
-               "../data/temp.data/sample.news.txt")
+               "./data/temp.data/sample.news.txt")
 }
 
 # load en_US.twitter.txt----
-if(file.exists("../data/temp.data/data.twitter.txt")){
-    sample.twitter <- read_tsv("../data/temp.data/data.twitter.txt")
+if(file.exists("./data/temp.data/data.twitter.txt")){
+    sample.twitter <- read_tsv("./data/temp.data/data.twitter.txt")
 } else {
-    data.raw.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+    data.raw.twitter <- readLines("./data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
                                   skipNul = TRUE,
                                   encoding="UTF-8")
     # create a sample
@@ -84,7 +84,7 @@ if(file.exists("../data/temp.data/data.twitter.txt")){
                              replace = FALSE)
     # write the sample to txt file in "output"
     writeLines(sample.twitter,
-               "../data/temp.data/sample.twitter.txt")
+               "./data/temp.data/sample.twitter.txt")
 }
 
 # Add line variable to data----
