@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # required libraries
 library(quanteda)
 library(data.table)
+library(readtext)
 
 ```
 
@@ -34,6 +35,9 @@ order n-gram if no solution found
 9. su
 
 ```{r}
+# clear environment
+rm(list = ls())
+
 # Load data----
 # download and unzip data folder
 if(!dir.exists("../data/Coursera-SwiftKey/")){
@@ -48,8 +52,8 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
 sample.size <- 0.05 # proportion of orignal text data to save to file
 
 # load en_US.blogs.txt----
-if(file.exists("../data/temp.data/data.blogs.txt")){
-    sample.blogs <- read_tsv("../data/temp.data/data.blogs.txt")
+if(file.exists("../data/temp.data/sample.blogs.txt")){
+    sample.blogs <- read_tsv("../data/temp.data/sample.blogs.txt")
 } else {
     data.raw.blogs <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
                                 skipNul = TRUE,
@@ -64,8 +68,8 @@ if(file.exists("../data/temp.data/data.blogs.txt")){
 }
 
 # load en_US.news.txt----
-if(file.exists("../data/temp.data/data.news.txt")){
-    sample.news <- read_tsv("../data/temp.data/data.news.txt")
+if(file.exists("../data/temp.data/sample.news.txt")){
+    sample.news <- read_tsv("../data/temp.data/sample.news.txt")
 } else {
     data.raw.news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
                                skipNul = TRUE)
@@ -79,8 +83,8 @@ if(file.exists("../data/temp.data/data.news.txt")){
 }
 
 # load en_US.twitter.txt----
-if(file.exists("../data/temp.data/data.twitter.txt")){
-    sample.twitter <- read_tsv("../data/temp.data/data.twitter.txt")
+if(file.exists("../data/temp.data/sample.twitter.txt")){
+    sample.twitter <- read_tsv("../data/temp.data/sample.twitter.txt")
 } else {
     data.raw.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
                                   skipNul = TRUE,
@@ -95,12 +99,43 @@ if(file.exists("../data/temp.data/data.twitter.txt")){
 }
 
 # Add line variable to data----
-data.blogs <- tibble(line = 1:length(sample.blogs),
+data.blogs <- data.table(line = 1:length(sample.blogs),
                      txt_sample = sample.blogs)
-data.news <- tibble(line = 1:length(sample.news),
+data.news <- data.table(line = 1:length(sample.news),
                     txt_sample = sample.news)
-data.twitter <- tibble(line = 1:length(sample.twitter),
+data.twitter <- data.table(line = 1:length(sample.twitter),
                        txt_sample = sample.twitter)
 
 ```
+```{r Test to eval read text file times, eval=FALSE, include=FALSE}
+# readr package
+# start time
+pt <- proc.time() 
+readr.sample.twitter <- read_tsv(file = "../data/temp.data/sample.twitter.txt")
+#end time
+proc.time() - pt
 
+# start time
+pt <- proc.time() 
+fread.sample.twitter <- fread(input = "../data/temp.data/sample.twitter.txt")
+#end time
+proc.time() - pt
+```
+```{r Test to eval read text file times, eval=FALSE, include=FALSE}
+# readr package
+# start time
+pt <- proc.time() 
+readtext.twitter <- read.table(file = "../data/temp.data/sample.twitter.txt",
+                             encoding = "UTF-8",
+                             header = FALSE)
+#end time
+proc.time() - pt
+
+# start time
+pt <- proc.time() 
+readLines.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                                  skipNul = TRUE,
+                                  encoding="UTF-8")
+#end time
+proc.time() - pt
+```
