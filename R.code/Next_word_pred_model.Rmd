@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(quanteda)
 library(data.table)
 library(readtext)
+library(readr)
 
 ```
 
@@ -139,3 +140,29 @@ readLines.twitter <- readLines("../data/Coursera-SwiftKey/final/en_US/en_US.twit
 #end time
 proc.time() - pt
 ```
+```{r other methods to read in data}
+# create function to read in convert, sample then write to file text data
+cleanFiles <- function(file, newfile, sample.size){
+    readLines(file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+        iconv(.) %>%
+        sample(.,
+               size = sample.size * length(.),
+               replace = FALSE) %>% 
+    writeLines(.,newfile)
+}
+
+cleanFiles(file = "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+           newfile = "../data/temp.data/data.twitter.txt",
+           sample.size = 0.05)
+
+# start time
+pt <- proc.time()
+data.twitter.fread <- fread("../data/temp.data/data.twitter.txt",
+                            sep = "\t",
+                            header = FALSE)
+#end time
+proc.time() - pt
+```
+
