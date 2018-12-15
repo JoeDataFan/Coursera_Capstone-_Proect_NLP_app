@@ -93,6 +93,10 @@ data.list <- list(data.blogs, data.news, data.twitter)
 map(data.list, summary)
 ```
 ```{r ---Unigram tokens-------}
+# list of data to run function on
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter") 
+
 # Tokenize to individual words
 unigram_tokens <- function(x, y){
     df <- unnest_tokens(tbl = x,
