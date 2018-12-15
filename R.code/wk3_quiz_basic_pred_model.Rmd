@@ -1,0 +1,253 @@
+---
+title: "Getting_n_cleaning_data"
+author: "Joe Rubash"
+date: "November 28, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Todo:
+- ensure that file has been read in correctly
+- where are the tags for the corporas that was mentioned?
+- figureout how to remove bad language
+- consider changing sample data back to text file then read text... may be faster
+
+# ##############################################################################
+```{r setup - loading and formating data}
+# global settings for chunks
+knitr::opts_chunk$set(echo=FALSE)
+
+# clear environment
+rm(list = ls())
+
+getwd()
+
+source("./Loading_cleaning_data.R")
+```                            
+# ##############################################################################
+
+# Quiz week 1
+```{r longest lines}
+# longest lines in data sets
+longest_lines <- function(x, y){
+    x %>% 
+        mutate(char.in.line = nchar(txt_sample))%>% 
+        mutate(source = y) %>%
+        arrange(desc(char.in.line)) %>% 
+        head(n = 1)
+}
+map2_df(.x = data.list,
+       .y = sources,
+       .f = longest_lines) %>%
+    select(source, char.in.line)
+```
+```{r love vs hate}
+lines_love <- data.twitter %>% 
+    mutate(love = str_detect(txt_sample, "love"))%>%
+    summarise(love_by_line = sum(love)) %>% 
+    filter(love_by_line != 0)
+
+lines_hate <- data.twitter %>% 
+    mutate(hate = str_detect(txt_sample, "hate"))%>%
+    summarise(hate_by_line = sum(hate)) %>% 
+    filter(hate_by_line != 0)
+
+
+lines_love$love_by_line / lines_hate$hate_by_line
+
+```
+```{r biostats tweet}
+data.raw.twitter[str_which(data.raw.twitter, " biostats ")]
+
+```
+
+```{r number tweets matching phrase}
+str_which(data.raw.twitter,
+          "A computer once beat me at chess, but it was no match for me at kickboxing") %>%
+    length()
+
+# remove original data
+rm(data.raw.twitter)
+```
+#.
+# Basic Prediction Model
+```{r combine all data sources}
+sample.all.data <- bind_rows(data.blogs, data.news, data.twitter) %>% 
+    mutate(line = 1:dim(.)[1])
+
+```
+```{r create word to integer dictionary}
+word.int.dict <- unnest_tokens(tbl = sample.all.data,
+                        output = words,
+                        input = txt_sample,
+                        token = "words",
+                        to_lower = TRUE) %>%
+    select(words) %>% 
+    unique() %>% 
+    mutate(word.int = 1:dim(.)[1])
+```
+
+```{r ---Bigram tokens freq--------}
+
+# Tokenize to two word groups
+bigram_tokens_freq <- unnest_tokens(tbl = sample.all.data,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 2,
+                        to_lower = TRUE) %>%
+    separate(words, sep = " ", into = c("first.word", "second.word")) %>% 
+    group_by(first.word) %>% 
+    count(second.word, sort = TRUE) %>% 
+    top_n(n, n = 1) %>% 
+    filter(n > 2)
+    
+
+```
+```{r ---Trigram tokens freq--------}
+
+# Tokenize to three word groups
+trigram_tokens_freq <- unnest_tokens(tbl = sample.all.data,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 3,
+                        to_lower = TRUE) %>%
+    mutate(first.2.words = str_remove(words, " [[:alpha:]]*$"),
+           third.word = str_extract(words, " [[:alpha:]]*$")%>% 
+               str_remove(., " "))  %>% 
+    group_by(first.2.words) %>% 
+    count(third.word, sort = TRUE) %>% 
+    top_n(n, n = 1) %>% 
+    filter(n > 2)
+
+```
+```{r ---Tetragram tokens freq--------}
+
+# Tokenize to four word groups
+tetragram_tokens_freq <- unnest_tokens(tbl = sample.all.data,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 4,
+                        to_lower = TRUE) %>%
+    mutate(first.3.words = str_remove(words, " [[:alpha:]]*$"),
+           forth.word = str_extract(words, " [[:alpha:]]*$")%>% 
+               str_remove(., " "))  %>% 
+    group_by(first.3.words) %>% 
+    count(forth.word, sort = TRUE) %>% 
+    top_n(n, n = 1) %>% 
+    filter(n > 2)
+    
+
+```
+# Plan for quiz
+search for row that contains previous 3, 2 or 1 word to last in tetra, tri and bigrams to find most likely next word
+
+Question 1
+For each of the sentence fragments below use your natural language processing algorithm to predict the next word in the sentence.
+
+The guy in front of me just bought a pound of bacon, a bouquet, and a case of
+soda
+beer - correct
+pretzels
+cheese
+```{r Question 1}
+tetragram_tokens_freq %>% filter(first.3.words == "a case of")
+
+triagram_tokens_freq %>% filter(first.3.words == "case of")
+```
+
+Question 2
+You're the reason why I smile everyday. Can you follow me please? It would mean the
+universe
+best
+most
+world - correct
+```{r Question 2}
+tetragram_tokens_freq %>% filter(first.3.words == "would mean the")
+```
+
+Question 3
+Hey sunshine, can you follow me and make me the
+bluest
+saddest
+smelliest
+happiest - correct
+```{r Question 3}
+tetragram_tokens_freq %>% filter(first.3.words == "make me the")
+```
+
+Question 4
+Very early observations on the Bills game: Offense still struggling but the
+crowd
+defense - correct
+referees
+players
+```{r Question 4}
+tetragram_tokens_freq %>% filter(first.3.words == "struggling but the")
+trigram_tokens_freq %>% filter(first.2.words == "but the")
+```
+
+Question 5
+Go on a romantic date at the
+beach - correct
+movies
+mall
+grocery
+```{r Question 5}
+tetragram_tokens_freq %>% filter(first.3.words == "date at the")
+```
+
+Question 6
+Well I'm pretty sure my granny has some old bagpipes in her garage I'll dust them off and be on my
+horse
+motorcycle
+way - correct
+phone
+```{r Question 6}
+tetragram_tokens_freq %>% filter(first.3.words == "be on my")
+trigram_tokens_freq %>% filter(first.2.words == "on my")
+```
+
+Question 7
+Ohhhhh #PointBreak is on tomorrow. Love that film and haven't seen it in quite some
+time - correct
+thing
+years
+weeks
+```{r Question 7}
+tetragram_tokens_freq %>% filter(first.3.words == "in quite some")
+```
+
+Question 8
+After the ice bucket challenge Louis will push his long wet hair out of his eyes with his little
+toes
+fingers - correct
+eyes
+ears
+```{r Question 8}
+tetragram_tokens_freq %>% filter(first.3.words == "make me the")
+```
+
+Question 9
+Be grateful for the good times and keep the faith during the
+hard
+bad - correct
+worse
+sad
+```{r Question 9}
+tetragram_tokens_freq %>% filter(first.3.words == "make me the")
+```
+
+Question 10
+If this isn't the cutest thing you've ever seen, then you must be
+insensitive
+callous
+asleep
+insane - correct
+```{r Question 10}
+tetragram_tokens_freq %>% filter(first.3.words == "make me the")
+```
+
