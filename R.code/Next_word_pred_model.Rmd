@@ -84,21 +84,28 @@ if(!file.exists("../data/temp.data/sample.twitter.txt")){
 
 # Load sampled data-------------------------------------------------------------
 # load blog data sample
-data.blogs <- read.delim("../data/temp.data/sample.blogs.txt",
-                                 sep = "\t",
+sample.blogs <- read.delim("../data/temp.data/sample.blogs.txt",
+                                 sep = "\n",
                                  header = FALSE,
                                  stringsAsFactors = FALSE)
 # load news data sample
-data.news <- read.delim("../data/temp.data/sample.news.txt",
-                            sep = "\t",
+sample.news <- read.delim("../data/temp.data/sample.news.txt",
+                            sep = "\n",
                             header = FALSE,
                             stringsAsFactors = FALSE)
 # load twitter data sample
-data.twitter <- read.delim("../data/temp.data/sample.twitter.txt",
-                            sep = "\t",
+sample.twitter <- read.delim("../data/temp.data/sample.twitter.txt",
+                            sep = "\n",
                             header = FALSE,
                             stringsAsFactors = FALSE)
 
+# Add line variable to data----
+data.blogs <- tibble(line = 1:length(sample.blogs),
+                     txt_sample = sample.blogs[,1])
+data.news <- tibble(line = 1:length(sample.news),
+                    txt_sample = sample.news[,1])
+data.twitter <- tibble(line = 1:length(sample.twitter),
+                       txt_sample = sample.twitter[,1])
 ```
 
 
