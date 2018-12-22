@@ -32,10 +32,22 @@ rm(list = ls())
 knitr::opts_chunk$set(echo = TRUE)
 
 # required libraries
-library(quanteda)
-library(data.table)
-library(readtext)
+library(tidyverse)
+library(forcats)
 library(readr)
+library(readtext)
+library(scales)
+library(tidytext)
+library(stringr)
+library(purrr)
+library(quanteda)
+library(tm)
+library(hunspell)
+library(pacman)
+p_load("cld2")
+p_load("cld3")
+library(data.table)
+library(knitr)
 
 # Download data-----------------------------------------------------------------
 # download and unzip data folder
@@ -47,65 +59,62 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
-# Sample data-------------------------------------------------------------------
-# read in all english data files, sample then save samples to file
+# Sample data------------------------------------------------------------------
+
+# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
 sample.size <- 0.05 # delete sample files and rerun code if changing sample size
 
+# check for file with same sample size in title if not make one
+if(file.exists(paste("../data/temp.data/sample.text.",
+                                 sample.size,
+                                 ".csv",
+                                 sep = ""))){
+    # read in csv file
+    sample.text <- fread(file = paste("../data/temp.data/sample.text.",
+                                 sample.size,
+                                 ".csv",
+                                 sep = ""))
+} else{
 # create function to read in convert, sample then write to file text data
-cleanFiles <- function(file, newfile, sample.size){
-    readLines(file,
+sample_data <- function(file){
+    readLines(con = file,
               skipNul = TRUE,
               encoding="UTF-8") %>%
-        iconv(.) %>%
-        sample(.,
-               size = sample.size * length(.),
-               replace = FALSE) %>% 
-    writeLines(.,newfile)
-}
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE) #%>% 
+        #data.table(text = .)
+    }
 
-# sample blog data
-if(!file.exists("../data/temp.data/sample.blogs.txt")){
-    cleanFiles(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
-               newfile = "../data/temp.data/sample.blogs.txt",
-               sample.size = sample.size)
-}
-# sample news data
-if(!file.exists("../data/temp.data/sample.news.txt")){
-    cleanFiles(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
-               newfile = "../data/temp.data/sample.news.txt",
-               sample.size = sample.size)
-}
-# sample twitter data
-if(!file.exists("../data/temp.data/sample.twitter.txt")){
-    cleanFiles(file = "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
-               newfile = "../data/temp.data/sample.twitter.txt",
-               sample.size = sample.size)
-}
+# read in, sample, and convert to data.table
+sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
 
-# Load sampled data-------------------------------------------------------------
-# load blog data sample
-sample.blogs <- read.delim("../data/temp.data/sample.blogs.txt",
-                                 sep = "\n",
-                                 header = FALSE,
-                                 stringsAsFactors = FALSE)
-# load news data sample
-sample.news <- read.delim("../data/temp.data/sample.news.txt",
-                            sep = "\n",
-                            header = FALSE,
-                            stringsAsFactors = FALSE)
-# load twitter data sample
-sample.twitter <- read.delim("../data/temp.data/sample.twitter.txt",
-                            sep = "\n",
-                            header = FALSE,
-                            stringsAsFactors = FALSE)
+sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
 
-# Add line variable to data----
-data.blogs <- tibble(line = 1:length(sample.blogs),
-                     txt_sample = sample.blogs[,1])
-data.news <- tibble(line = 1:length(sample.news),
-                    txt_sample = sample.news[,1])
-data.twitter <- tibble(line = 1:length(sample.twitter),
-                       txt_sample = sample.twitter[,1])
+sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+
+# combine all text samples
+sample.text <- rbind(sample.blogs, sample.news, sample.twitter) 
+
+# remove unneeded objects
+#rm(sample.blogs, sample.news, sample.twitter)
+
+# add lines variable
+sample.text[, line := 1:length(sample.text$text)]
+
+# write data.table to file  
+fwrite(sample.text, file = paste("../data/temp.data/sample.text.",
+                                 sample.size,
+                                 ".csv",
+                                 sep = ""))
+} 
+
+text.a <- c("a", "b", "c")
+text.b <- c("d", "e", "f")
+
+test <- c(sample.blogs, sample.news, sample.twitter)
+corpus.test <- corpus(test)
+corpus.test.sentences <- tokens(corpus.test, what = "sentence") 
+corpus.test.4gram <- tokens_ngrams(corpus.test.sentences, n = 4)
 ```
-
 
