@@ -117,4 +117,31 @@ corpus.test <- corpus(test)
 corpus.test.sentences <- tokens(corpus.test, what = "sentence") 
 corpus.test.4gram <- tokens_ngrams(corpus.test.sentences, n = 4)
 ```
+```{r tests}
+test.text <- c(sample.blogs, sample.news, sample.twitter)
+
+test.corpus <- corpus(test.text)
+
+tokens.test <- tokens(test.corpus, remove_punct = TRUE)
+
+token.dfm <- dfm(tokens.test)
+sum.token.dfm <- colSums(token.dfm)
+
+token.dfm.prop <- dfm_weight(token.dfm, scheme = "prop")
+sum.token.dfm.prop <- colSums(token.dfm.prop)
+
+system.time(bigram.dfm <- tokens_ngrams(tokens.test, n = 2))
+
+# removes features with less than 10 occurances
+dfm_trim(dfm, min_termfreq = 10)
+# converts counts to proportions
+dfm_weight(dfm, scheme  = "prop")
+#  translates dictionary values to keys in a DFM.
+dfm_lookup()
+
+# example
+news_dfm <- dfm(corp, remove = stopwords('en'), remove_punct = TRUE)
+news_dfm <- dfm_remove(news_dfm, pattern = c('*-time', 'updated-*', 'gmt', 'bst'))
+news_dfm <- dfm_trim(news_dfm, min_termfreq = 100)
+```
 
