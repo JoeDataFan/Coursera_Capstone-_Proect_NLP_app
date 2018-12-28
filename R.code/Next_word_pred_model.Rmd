@@ -19,6 +19,8 @@ white space. etc)
 8. to colsum of frequencies to
 9. create backoff method to start with highest order n-gram then move to lowest
 order n-gram if no solution found
+10. create method to evaluate accuracy and efficiency of model. Make this easy to 
+run so I can later itterate quickly through different ideas to improve
 
 
 ## stage two use smoothing to improve prediction and various methods to spee up
@@ -93,11 +95,13 @@ sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en
 
 sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
 
-# combine all text samples
-sample.text <- rbind(sample.blogs, sample.news, sample.twitter) 
+# Combine all text samples----
+sample.text <- c(sample.blogs, sample.news, sample.twitter) 
 
 # remove unneeded objects
 #rm(sample.blogs, sample.news, sample.twitter)
+
+# 
 
 # add lines variable
 sample.text[, line := 1:length(sample.text$text)]
@@ -109,14 +113,57 @@ fwrite(sample.text, file = paste("../data/temp.data/sample.text.",
                                  sep = ""))
 } 
 
-text.a <- c("a", "b", "c")
-text.b <- c("d", "e", "f")
+# the following code seems to work well to create unigram and bigram tokens from 
+# combined text. The tokens can then be converted from lists to a single character
+# vector.
+# todo:
+# apply to all sample.text
+# create and unlist unigram, bigram, trigram, tetragram, pentagram
+# convert to data table
+# split into base and predict words
+# determine frequencies for each base / predict word pair
 
-test <- c(sample.blogs, sample.news, sample.twitter)
-corpus.test <- corpus(test)
-corpus.test.sentences <- tokens(corpus.test, what = "sentence") 
-corpus.test.4gram <- tokens_ngrams(corpus.test.sentences, n = 4)
+corpus.test <- corpus(sample.text)
+corpus.test.sentences <- tokens(corpus.test,
+                                what = "sentence",
+                                include_docvars = FALSE) 
+corpus.test.unigram <- tokens(corpus.test, what = "word",
+                              remove_numbers = TRUE,
+                              remove_punct = TRUE,
+                              remove_symbols = TRUE,
+                              remove_separators = TRUE,
+                              remove_twitter = TRUE, 
+                              remove_hyphens = TRUE,
+                              remove_url = TRUE,
+                              ngrams = 1L,
+                              skip = 0L,
+                              concatenator = "_",
+                              verbose = quanteda_options("verbose"),
+                              include_docvars = TRUE) %>% 
+    tokens_tolower(.)
+
+
+corpus.test.bigram <- tokens(sample.blogs, what = "word",
+                              remove_numbers = TRUE,
+                              remove_punct = TRUE,
+                              remove_symbols = TRUE,
+                              remove_separators = TRUE,
+                              remove_twitter = TRUE, 
+                              remove_hyphens = TRUE,
+                              remove_url = TRUE,
+                              ngrams = 2L,
+                              skip = 0L,
+                              concatenator = "_",
+                              verbose = quanteda_options("verbose"),
+                              include_docvars = FALSE) %>% 
+    tokens_tolower(.)
+
+# combine all bigrams into one character vector
+unlist.bigram <- unlist(head(corpus.test.bigram), use.names = FALSE)
+
 ```
+# 
+
 ```{r tests}
 test.text <- c(sample.blogs, sample.news, sample.twitter)
 
@@ -144,4 +191,5 @@ news_dfm <- dfm(corp, remove = stopwords('en'), remove_punct = TRUE)
 news_dfm <- dfm_remove(news_dfm, pattern = c('*-time', 'updated-*', 'gmt', 'bst'))
 news_dfm <- dfm_trim(news_dfm, min_termfreq = 100)
 ```
-
+# Ideas to improve accuracy and efficiency
+- tokenize sentences to account for start and end of sentences
