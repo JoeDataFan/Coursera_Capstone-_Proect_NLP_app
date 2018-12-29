@@ -49,6 +49,7 @@ library(pacman)
 p_load("cld2")
 p_load("cld3")
 library(data.table)
+library(stringi)
 library(knitr)
 
 # Download data-----------------------------------------------------------------
@@ -116,18 +117,12 @@ fwrite(sample.text, file = paste("../data/temp.data/sample.text.",
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
-# todo:
-# apply to all sample.text
-# create and unlist unigram, bigram, trigram, tetragram, pentagram
-# convert to data table
-# split into base and predict words
-# determine frequencies for each base / predict word pair
 
 corpus.test <- corpus(sample.text)
-corpus.test.sentences <- tokens(corpus.test,
-                                what = "sentence",
-                                include_docvars = FALSE) 
-corpus.test.unigram <- tokens(corpus.test, what = "word",
+corpus.test.sentences <- corpus_reshape(corpus.test,
+                                to = "sentence") 
+
+corpus.test.unigram <- tokens(corpus.test.sentences, what = "word",
                               remove_numbers = TRUE,
                               remove_punct = TRUE,
                               remove_symbols = TRUE,
@@ -140,10 +135,11 @@ corpus.test.unigram <- tokens(corpus.test, what = "word",
                               concatenator = "_",
                               verbose = quanteda_options("verbose"),
                               include_docvars = TRUE) %>% 
-    tokens_tolower(.)
+    tokens_tolower(.) %>% 
+    unlist(., use.names = FALSE)
 
 
-corpus.test.bigram <- tokens(sample.blogs, what = "word",
+corpus.test.bigram <- tokens(corpus.test.sentences, what = "word",
                               remove_numbers = TRUE,
                               remove_punct = TRUE,
                               remove_symbols = TRUE,
@@ -156,13 +152,39 @@ corpus.test.bigram <- tokens(sample.blogs, what = "word",
                               concatenator = "_",
                               verbose = quanteda_options("verbose"),
                               include_docvars = FALSE) %>% 
-    tokens_tolower(.)
+    tokens_tolower(.)%>% 
+    unlist(., use.names = FALSE)
+
+bigram.base.pred <- data.table(text = corpus.test.bigram)
+bigram.base.pred <- bigram.base.pred[, c("base", "pred")
+                                     := data.table(stri_split_fixed(text, "_",
+                                                                    simplify = TRUE))]
+bigram.base.pred <- bigram.base.pred[, text := NULL]
+
+bigram.base.pred.freq <- bigram.base.pred[, ":=" (count = uniqueN(pred),
+                                                   base.count = .N),
+                                                   by = base]
+
+bigram.base.pred.freq <- bigram.base.pred.freq[ , .SD[which.max(count)],
+                                                by = base]
+
+table(head(bigram.base.pred))
 
 # combine all bigrams into one character vector
 unlist.bigram <- unlist(head(corpus.test.bigram), use.names = FALSE)
 
+dfm.bigram.base.pred <- dfm(bigram.base.pred)
+
 ```
-# 
+# Thoughts and todo:
+- need to remove bad words... perhaps I can group by sentences then remove sentences with bad words
+- create and unlist bigram, trigram, tetragram, pentagram
+- convert to data table
+- split into base and predict words
+- determine frequencies for each base / predict word pair
+- remove low frequency ngrams
+
+
 
 ```{r tests}
 test.text <- c(sample.blogs, sample.news, sample.twitter)
@@ -171,7 +193,12 @@ test.corpus <- corpus(test.text)
 
 tokens.test <- tokens(test.corpus, remove_punct = TRUE)
 
-token.dfm <- dfm(tokens.test)
+token.dfm <- dfm(corpus.test.unigram)
+unigram.freq <- textstat_frequency(token.dfm)
+
+bi.dfm <- dfm(corpus.test.bigram)
+bigram.freq <- textstat_frequency(bi.dfm)
+
 sum.token.dfm <- colSums(token.dfm)
 
 token.dfm.prop <- dfm_weight(token.dfm, scheme = "prop")
@@ -190,6 +217,16 @@ dfm_lookup()
 news_dfm <- dfm(corp, remove = stopwords('en'), remove_punct = TRUE)
 news_dfm <- dfm_remove(news_dfm, pattern = c('*-time', 'updated-*', 'gmt', 'bst'))
 news_dfm <- dfm_trim(news_dfm, min_termfreq = 100)
+
+
+test <- c("b_c", "d_c", "g_h")
+dt.test <- data.table(text = test)
+dt.split.test <- dt.test[, c("base", "pred")
+                         := data.table(stri_split_fixed(test, "_",
+                                                        simplify = TRUE))]
+
+data.table(stri_split_fixed(test, "_", simplify = TRUE))
+
 ```
 # Ideas to improve accuracy and efficiency
-- tokenize sentences to account for start and end of sentences
+- 
