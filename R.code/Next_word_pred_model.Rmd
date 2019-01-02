@@ -7,7 +7,7 @@ output: html_document
 
 
 # plan of attack ("make it work", "make it right", "make it fast")
-## Stage one - make a simple model using calculated frequencies from n-grams
+Stage one - make a simple model using calculated frequencies from n-grams
 1. read in data and make a corpus with all sources
 2. to start out sample a small portion of this corpus
 3. use qunteda package to create unigram (to lower case, strip punc, remove extra 
@@ -23,7 +23,7 @@ order n-gram if no solution found
 run so I can later itterate quickly through different ideas to improve
 
 
-## stage two use smoothing to improve prediction and various methods to spee up
+stage two use smoothing to improve prediction and various methods to spee up
 8. figure out how to alter frequencies to predict unkowns
 9. su
 
@@ -35,19 +35,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # required libraries
 library(tidyverse)
-library(forcats)
 library(readr)
 library(readtext)
-library(scales)
-library(tidytext)
-library(stringr)
 library(purrr)
 library(quanteda)
 library(tm)
-library(hunspell)
-library(pacman)
-p_load("cld2")
-p_load("cld3")
 library(data.table)
 library(stringi)
 library(knitr)
@@ -62,7 +54,7 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
-# Sample data------------------------------------------------------------------
+# Prepare blog data-------------------------------------------------------------
 
 # define sample size, read in all english data files, sample, combine, add lines and save to file as csv
 sample.size <- 0.05 # delete sample files and rerun code if changing sample size
@@ -100,18 +92,18 @@ sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_
 sample.text <- c(sample.blogs, sample.news, sample.twitter) 
 
 # remove unneeded objects
-#rm(sample.blogs, sample.news, sample.twitter)
+rm(sample.blogs, sample.news, sample.twitter)
 
 # 
 
 # add lines variable
-sample.text[, line := 1:length(sample.text$text)]
+#sample.text[, line := 1:length(sample.text$text)]
 
 # write data.table to file  
-fwrite(sample.text, file = paste("../data/temp.data/sample.text.",
-                                 sample.size,
-                                 ".csv",
-                                 sep = ""))
+#fwrite(sample.text, file = paste("../data/temp.data/sample.text.",
+#                                 sample.size,
+#                                 ".csv",
+#                                 sep = ""))
 } 
 
 # the following code seems to work well to create unigram and bigram tokens from 
@@ -138,7 +130,7 @@ corpus.test.unigram <- tokens(corpus.test.sentences, what = "word",
     tokens_tolower(.) %>% 
     unlist(., use.names = FALSE)
 
-
+# create bigram
 corpus.test.bigram <- tokens(corpus.test.sentences, what = "word",
                               remove_numbers = TRUE,
                               remove_punct = TRUE,
@@ -155,38 +147,204 @@ corpus.test.bigram <- tokens(corpus.test.sentences, what = "word",
     tokens_tolower(.)%>% 
     unlist(., use.names = FALSE)
 
+# convert to data.table then split bigram into base and prediction
 bigram.base.pred <- data.table(text = corpus.test.bigram)
 bigram.base.pred <- bigram.base.pred[, c("base", "pred")
                                      := data.table(stri_split_fixed(text, "_",
                                                                     simplify = TRUE))]
 bigram.base.pred <- bigram.base.pred[, text := NULL]
 
+# determine counts of unigue prediction words by base word
 bigram.base.pred.freq <- bigram.base.pred[, ":=" (count = uniqueN(pred),
-                                                   base.count = .N),
+                                                   base.count = .N,
+                                                  prob = count / base.count),
                                                    by = base]
-
+# return max count for each base (MLE prediction word)
 bigram.base.pred.freq <- bigram.base.pred.freq[ , .SD[which.max(count)],
                                                 by = base]
+# test out predictions 
+bigram.base.pred.freq[base == "great", pred]
 
-table(head(bigram.base.pred))
+# start of methods to input base words into model to predict next word
+text.input <- "for the following reasons I Want to"
+# extract last two words from input text
+trim.input <- str_extract(text.input, "[[:alpha:]]* [[:alpha:]]*$") %>% 
+    tolower()
 
-# combine all bigrams into one character vector
-unlist.bigram <- unlist(head(corpus.test.bigram), use.names = FALSE)
+bigram.base.pred.freq[base == trim.input, pred]
+```
+```{r setup - load and model blog data}
+# clear environment
+rm(list = ls())
 
-dfm.bigram.base.pred <- dfm(bigram.base.pred)
+knitr::opts_chunk$set(echo = TRUE)
 
+# required libraries
+library(tidyverse)
+library(readr)
+library(readtext)
+library(purrr)
+library(quanteda)
+library(tm)
+library(data.table)
+library(stringi)
+library(knitr)
+
+# Download data-----------------------------------------------------------------
+# download and unzip data folder
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+# Prepare blog data-------------------------------------------------------------
+
+# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
+sample.size <- 0.05 # delete sample files and rerun code if changing sample size
+
+# create function to read in convert, sample then write to file text data
+sample_data <- function(file){
+    readLines(con = file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE) #%>% 
+        #data.table(text = .)
+    }
+
+# read in, sample, and convert to data.table
+sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+
+# the following code seems to work well to create unigram and bigram tokens from 
+# combined text. The tokens can then be converted from lists to a single character
+# vector.
+
+corpus.blogs.sentences <- corpus(sample.blogs) %>%
+    corpus_reshape(., to = "sentence") 
+
+create_ngrams <- function(corpus, ngrams){
+    tokens(corpus, what = "word",
+                              remove_numbers = TRUE,
+                              remove_punct = TRUE,
+                              remove_symbols = TRUE,
+                              remove_separators = TRUE,
+                              remove_twitter = TRUE, 
+                              remove_hyphens = TRUE,
+                              remove_url = TRUE,
+                              ngrams = ngrams,
+                              skip = 0L,
+                              concatenator = "_",
+                              verbose = quanteda_options("verbose"),
+                              include_docvars = TRUE) %>% 
+    tokens_tolower(.) %>% 
+    unlist(., use.names = FALSE)
+    }
+
+# create unigrams for blog data
+blogs.unigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 1L)
+
+# create bigram
+blogs.bigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 2L) %>% 
+    data.table(text = .) %>% 
+    .[, c("base", "pred") 
+      := data.table(stri_replace_last_fixed(text,"_", " ") %>%
+                        stri_split_fixed(text, " ",
+                                         simplify = TRUE))]
+
+# convert to data.table then split bigram into base and prediction
+bigram.base.pred <- data.table(text = corpus.test.bigram)
+bigram.base.pred <- bigram.base.pred[, c("base", "pred")
+                                     := data.table(stri_replace_last_fixed(text,"_", " ") %>%
+                                                       stri_split_fixed(text, " ",
+                                                                        simplify = TRUE))]
+bigram.base.pred <- bigram.base.pred[, text := NULL]
+
+# determine counts of unigue prediction words by base word
+bigram.base.pred.freq <- bigram.base.pred[, ":=" (count = uniqueN(pred),
+                                                   base.count = .N,
+                                                  prob = count / base.count),
+                                                   by = base]
+# return max count for each base (MLE prediction word)
+bigram.base.pred.freq <- bigram.base.pred.freq[ , .SD[which.max(count)],
+                                                by = base]
+# test out predictions 
+bigram.base.pred.freq[base == "great", pred]
+
+# start of methods to input base words into model to predict next word
+text.input <- "for the following reasons I Want to"
+# extract last two words from input text
+trim.input <- str_extract(text.input, "[[:alpha:]]* [[:alpha:]]*$") %>% 
+    tolower()
+
+bigram.base.pred.freq[base == trim.input, pred]
 ```
 # Thoughts and todo:
-- need to remove bad words... perhaps I can group by sentences then remove sentences with bad words
-- create and unlist bigram, trigram, tetragram, pentagram
-- convert to data table
+- learn how to use multiple cores (parallel processing)
+- learn how to index / create dictionary to speedup processing
+need to remove bad words... perhaps I can group by sentences then remove sentences with bad words
+- create unigram, bigram, trigram, tetragram, pentagram
 - split into base and predict words
 - determine frequencies for each base / predict word pair
-- remove low frequency ngrams
+- 
 
 
 
 ```{r tests}
+ngram_fcm <- function(tokens, ngrams) {
+
+  ngms <- tokens
+
+  # get rid of tokens metadata not necessary for our UC
+  ngms_lst <-  as.list(ngms)
+  ngms_unlst  <- unlist(ngms_lst) # (named) character with _ sep. ngrams
+
+  # split in " "-separated pairs:  "n-1 tokens", "nth token"
+  ngms_blank_sep <- stringi::stri_replace_last_fixed(ngms_unlst,"_", " ")
+
+  # list of character(2)  ( (n-1)gram ,nth token )
+  tk2_lst <- tokens(ngms_blank_sep)
+
+  # --- end of tokens/ngrams pre-processing
+
+  # ordinary fcm
+  fcm_ord <- fcm(tk2_lst , ordered = TRUE)
+}
+
+bigram.fcm <- ngram_fcm(tokens = corpus.test.bigram, ngrams = 2)
+trigram.fcm <- ngram_fcm(corpus = corpus.test.sentences, ngrams = 3)
+
+sample_code()
+[1] "based on https://github.com/quanteda/quanteda/issues/1413#issuecomment-414795832"
+[1] "great package great support, thanks"
+Feature co-occurrence matrix of: 7 by 6 features.
+7 x 6 sparse Matrix of class "fcm"
+         features
+features  a b 1 2 3 4
+  3_a_b_2 0 0 0 0 1 0
+  a_b_2_3 0 0 0 0 0 1
+  b_2_3_4 1 0 0 0 0 0
+  2_3_4_a 0 1 0 0 0 0
+  3_4_a_b 0 0 0 0 1 0
+  4_a_b_3 0 0 0 0 0 1
+  a_b_3_4 0 0 0 0 0 0   
+
+
+
+
+
+
+
+
+bigram.dfm <- dfm(corpus.test.bigram)
+
+text.input <- "for the following reasons I want to"
+
+str_extract(text.input, "[[:alpha:]]* [[:alpha:]]*$")
+
 test.text <- c(sample.blogs, sample.news, sample.twitter)
 
 test.corpus <- corpus(test.text)
@@ -230,3 +388,48 @@ data.table(stri_split_fixed(test, "_", simplify = TRUE))
 ```
 # Ideas to improve accuracy and efficiency
 - 
+```{r}
+sample_code <- function() {
+
+  require(quanteda)
+
+  print(paste("based on","https://github.com/quanteda/quanteda/issues/1413#issuecomment-414795832"))
+  print("great package great support, thanks")
+
+  ngms <- tokens("a b 1 2 3 a b 2 3 4 a b 3 4 5", n = 2:5)
+
+  # get rid of tokens metadata not necessary for our UC
+  ngms_lst <-  as.list(ngms)
+  ngms_unlst  <- unlist(ngms_lst) # (named) character with _ sep. ngrams
+
+  # split in " "-separated pairs:  "n-1 tokens", "nth token"
+  ngms_blank_sep <- stringi::stri_replace_last_fixed(ngms_unlst,"_", " ")
+
+  # list of character(2)  ( (n-1)gram ,nth token )
+  tk2_lst <- tokens(ngms_blank_sep)
+
+  # --- end of tokens/ngrams pre-processing
+
+  # ordinary fcm
+  fcm_ord <- fcm(tk2_lst , ordered = TRUE)
+
+  fcm_ord[33:39, 1:6]
+}
+
+
+sample_code()
+[1] "based on https://github.com/quanteda/quanteda/issues/1413#issuecomment-414795832"
+[1] "great package great support, thanks"
+Feature co-occurrence matrix of: 7 by 6 features.
+7 x 6 sparse Matrix of class "fcm"
+         features
+features  a b 1 2 3 4
+  3_a_b_2 0 0 0 0 1 0
+  a_b_2_3 0 0 0 0 0 1
+  b_2_3_4 1 0 0 0 0 0
+  2_3_4_a 0 1 0 0 0 0
+  3_4_a_b 0 0 0 0 1 0
+  4_a_b_3 0 0 0 0 0 1
+  a_b_3_4 0 0 0 0 0 0   
+```
+
