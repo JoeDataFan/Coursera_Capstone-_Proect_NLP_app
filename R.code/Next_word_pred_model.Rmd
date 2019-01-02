@@ -216,18 +216,29 @@ sample_data <- function(file){
         #data.table(text = .)
     }
 
-# read in, sample, and convert to data.table
+# read in and sample all text data
 sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+
+sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
+
+sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+
+# Combine all text samples
+sample.text <- c(sample.blogs, sample.news, sample.twitter) 
+
+# remove unneeded objects
+rm(sample.blogs, sample.news, sample.twitter)
 
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
 
 # Prepare corpus by sentences---------------------------------------------------
-corpus.blogs.sentences <- corpus(sample.blogs) %>%
+corpus.sentences <- corpus(sample.text) %>%
     corpus_reshape(., to = "sentence") 
 
-# Create ngrams-----------------------------------------------------------------
+# Functions to create ngrams and then calculate frequencies
+# Create ngrams
 create_ngrams <- function(corpus, ngrams){
     tokens(corpus, what = "word",
                               remove_numbers = TRUE,
@@ -246,15 +257,7 @@ create_ngrams <- function(corpus, ngrams){
     unlist(., use.names = FALSE)
     }
 
-# create ngrams for blog data
-blogs.unigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 1L)
-blogs.bigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 2L)
-blogs.trigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 3L)
-blogs.quadgram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 4L)
-blogs.pentagram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 5L)
-
-
-# Model data--------------------------------------------------------------------
+# Model data
 # convert to data.table then split bigram into base and prediction
 split_base_pred_freq <- function(ngram){
     dt <- data.table(text = ngram)
@@ -270,6 +273,21 @@ split_base_pred_freq <- function(ngram){
               by = base]
     return(dt)
 }
+
+# create ngrams for blog data
+unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
+
+
+
+bigram <- create_ngrams(corpus = corpus.sentences, ngrams = 2L)
+bigram.freq <- split_base_pred_freq(ngram = bigram)
+rm(bigram)
+
+
+
+trigram <- create_ngrams(corpus = corpus.sentences, ngrams = 3L)
+quadgram <- create_ngrams(corpus = corpus.sentences, ngrams = 4L)
+pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
 
 blogs.bigram.freq <- split_base_pred_freq(ngram = blogs.bigram)
 blogs.trigram.freq <- split_base_pred_freq(ngram = blogs.trigram)
@@ -301,7 +319,9 @@ need to remove bad words... perhaps I can group by sentences then remove sentenc
 - create unigram, bigram, trigram, tetragram, pentagram
 - split into base and predict words
 - determine frequencies for each base / predict word pair
-- 
+- combine all data and save to file
+- create program to run predictions using backoff method. start at 5 grams then end with most common unigram work if no solution is found
+
 
 
 
