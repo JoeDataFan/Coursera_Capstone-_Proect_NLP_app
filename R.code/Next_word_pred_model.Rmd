@@ -188,6 +188,7 @@ library(quanteda)
 library(tm)
 library(data.table)
 library(stringi)
+library(stringr)
 library(knitr)
 
 # Download data-----------------------------------------------------------------
@@ -200,8 +201,7 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
-# Prepare blog data-------------------------------------------------------------
-
+# Sample data------------------------------------------------------------------
 # define sample size, read in all english data files, sample, combine, add lines and save to file as csv
 sample.size <- 0.05 # delete sample files and rerun code if changing sample size
 
@@ -223,9 +223,11 @@ sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
 
+# Prepare corpus by sentences---------------------------------------------------
 corpus.blogs.sentences <- corpus(sample.blogs) %>%
     corpus_reshape(., to = "sentence") 
 
+# Create ngrams-----------------------------------------------------------------
 create_ngrams <- function(corpus, ngrams){
     tokens(corpus, what = "word",
                               remove_numbers = TRUE,
@@ -244,43 +246,53 @@ create_ngrams <- function(corpus, ngrams){
     unlist(., use.names = FALSE)
     }
 
-# create unigrams for blog data
+# create ngrams for blog data
 blogs.unigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 1L)
+blogs.bigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 2L)
+blogs.trigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 3L)
+blogs.quadgram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 4L)
+blogs.pentagram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 5L)
 
-# create bigram
-blogs.bigram <- create_ngrams(corpus = corpus.blogs.sentences, ngrams = 2L) %>% 
-    data.table(text = .) %>% 
-    .[, c("base", "pred") 
-      := data.table(stri_replace_last_fixed(text,"_", " ") %>%
-                        stri_split_fixed(text, " ",
-                                         simplify = TRUE))]
 
+# Model data--------------------------------------------------------------------
 # convert to data.table then split bigram into base and prediction
-bigram.base.pred <- data.table(text = corpus.test.bigram)
-bigram.base.pred <- bigram.base.pred[, c("base", "pred")
-                                     := data.table(stri_replace_last_fixed(text,"_", " ") %>%
-                                                       stri_split_fixed(text, " ",
-                                                                        simplify = TRUE))]
-bigram.base.pred <- bigram.base.pred[, text := NULL]
+split_base_pred_freq <- function(ngram){
+    dt <- data.table(text = ngram)
+    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+    dt <- dt[, text := NULL]
+    dt <- dt[, ":=" (count = uniqueN(pred),
+               base.count = .N),
+             by = base]
+    dt <- dt[, prob := count / base.count]
+    dt <- dt[ , .SD[which.max(count)],
+              by = base]
+    return(dt)
+}
+
+blogs.bigram.freq <- split_base_pred_freq(ngram = blogs.bigram)
+blogs.trigram.freq <- split_base_pred_freq(ngram = blogs.trigram)
+blogs.quadgram.freq <- split_base_pred_freq(ngram = blogs.bigram)
+blogs.pentagram.freq <- split_base_pred_freq(ngram = blogs.bigram)
+
+
 
 # determine counts of unigue prediction words by base word
-bigram.base.pred.freq <- bigram.base.pred[, ":=" (count = uniqueN(pred),
-                                                   base.count = .N,
-                                                  prob = count / base.count),
-                                                   by = base]
 # return max count for each base (MLE prediction word)
-bigram.base.pred.freq <- bigram.base.pred.freq[ , .SD[which.max(count)],
-                                                by = base]
+bigram.base.pred.freq <- base_pred_freq(dt = bigram.base.pred)
+
 # test out predictions 
 bigram.base.pred.freq[base == "great", pred]
 
 # start of methods to input base words into model to predict next word
-text.input <- "for the following reasons I Want to"
+text.input <- "been close"
 # extract last two words from input text
 trim.input <- str_extract(text.input, "[[:alpha:]]* [[:alpha:]]*$") %>% 
-    tolower()
+    tolower() %>% 
+    str_replace_all(., "\\s", "_")
 
-bigram.base.pred.freq[base == trim.input, pred]
+blogs.trigram.freq[base == trim.input, pred]
 ```
 # Thoughts and todo:
 - learn how to use multiple cores (parallel processing)
