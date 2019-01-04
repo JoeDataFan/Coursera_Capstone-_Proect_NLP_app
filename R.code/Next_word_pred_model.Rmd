@@ -168,36 +168,25 @@ ngrams.freq <- setkey(ngrams.freq, base)
 
 proc.time() - ptm
 
+test <- ngrams.freq[count > 2]
 ```
 ```{r Run model}
-
 ptm <- proc.time()
-ngrams.freq[base == "give_me"]
+input <- "and a case of"
+
+n = 4:1
+patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+test.input <- data.table(base = stri_extract(input, regex = patt))
+test.input <- test.input[, order := 1:length(test.input$base)]
+prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
+    tolower()] 
+
+results.dt <- merge(prep.input, ngrams.freq, by = "base")
+results.dt <- results.dt[order(order)]
+result <- results.dt[1, pred]
+print(result)
+    
 proc.time() - ptm
-
-benchmark(ngrams.freq[base == "give_me"])
-
-# start of methods to input base words into model to predict next word
-text.input <- "been close"
-# extract last two words from input text
-trim.input <- str_extract(text.input, "[[:alpha:]]* [[:alpha:]]*$") %>% 
-    tolower() %>% 
-    str_replace_all(., "\\s", "_")
-
-blogs.trigram.freq[base == trim.input, pred]
-
-
-#test <- "the beach"
-#test <- tolower(test)
-#last4 <- word(string, start = -4, end = -1)
-#last3 <- word(string, start = -3, end = -1)
-#last2 <- word(string, start = -2, end = -1)
-#last1 <- word(string, -1)
-#
-#test.words <- c(last4, last3, last2, last1) %>% 
-#    str_replace_all(., "\\s", "_")
-
-ngrams.freq[base == "case_of"]
 ```
 
 
@@ -211,6 +200,69 @@ need to remove bad words... perhaps I can group by sentences then remove sentenc
 - combine all data and save to file
 - create program to run predictions using backoff method. start at 5 grams then end with most common unigram work if no solution is found
 
+```{r week 3 quiz}
+# 1. The guy in front of me just bought a pound of bacon, a bouquet, and a case of
+# soda
+# beer - answer good
+# cheese
+# pretzels
+
+# 2. You're the reason why I smile everyday. Can you follow me please? It would mean the
+# universe
+# most
+# best
+# world - answer good
+
+# 3. Hey sunshine, can you follow me and make me the
+# saddest
+# smelliest
+# happiest - answer no
+# bluest
+
+# 4. Very early observations on the Bills game: Offense still struggling but the
+# crowd
+# players
+# referees
+# defense - answer no
+
+# 5. Go on a romantic date at the
+# mall
+# beach - answer no
+# grocery
+# movies
+
+# 6. Well I'm pretty sure my granny has some old bagpipes in her garage I'll dust them off and be on my
+# phone
+# way - answer close (would work if I dropped count under 2)
+# horse
+# motorcycle
+
+# 7. Ohhhhh #PointBreak is on tomorrow. Love that film and haven't seen it in quite some
+# weeks
+# thing
+# time - answer yes (better if I drop count of 1)
+# years
+
+# 8. After the ice bucket challenge Louis will push his long wet hair out of his eyes with his little
+# toes
+# eyes
+# ears
+# fingers - answer no
+
+# 9. Be grateful for the good times and keep the faith during the
+# sad
+# worse
+# bad - answer no
+# hard
+
+# 10. If this isn't the cutest thing you've ever seen, then you must be
+# callous
+# insensitive
+# asleep
+# insane - answer no
+
+
+```
 
 
 
