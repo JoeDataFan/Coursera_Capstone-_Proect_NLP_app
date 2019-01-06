@@ -220,6 +220,61 @@ split_base_pred <- function(ngram){
     
 valid.pentagram <- split_base_pred(ngram = pentagram)
 rm(pentagram, corpus.sentences)
+
+# further prepare validation data for entry into prediction algorithm
+valid.pentagram.base <- valid.pentagram[["base"]]
+valid.pentagram.pred <- valid.pentagram[["pred"]]
+
+predict_next_word <- function(prev.words, model = ngrams.freq.15){
+    string <- str_replace_all(prev.words, "_", " ")
+    n = 4:1
+    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+    test.input <- data.table(base = stri_extract(string, regex = patt))
+    test.input <- test.input[, order := length(test.input$base):1]
+    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
+        tolower()] 
+    prep.input <- setkey(prep.input, base)
+    prep.input <- prep.input$base
+    results.dt <- model[base %in% prep.input]
+    #results.dt <- results.dt[order(order)]
+    #results.dt <- results.dt[, norm.prob := prob ^ (1/order)]
+    #result <- results.dt[order(-prob), pred] %>% as.character(.)
+    result <- results.dt[order(-prob)[1], .(base, pred)]
+    #result <- result$pred
+    #result <- result[, actual.pred := dt[n.rows, pred]]
+    #result <- result[, result := actual.pred == pred]
+    print(result)
+    }
+
+predict_next_word(prev.words = valid.pentagram.base[589])
+
+num.to.test <- 6000:6050
+model.test <- map_df(.x = valid.pentagram.base[num.to.test], .f = predict_next_word) %>%
+    mutate(actual.pred = valid.pentagram.pred[num.to.test],
+           result = pred == actual.pred)
+model.test %>% summarise(correct.pred.rate = sum(result)/length(result))
+
+input <- str_replace_all(dt[["base"]][n.rows], "_", " ")
+
+    n = 4:1
+    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+    test.input <- data.table(base = stri_extract(input, regex = patt))
+    test.input <- test.input[, order := length(test.input$base):1]
+    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
+        tolower(), with = TRUE] 
+    prep.input <- setkey(prep.input, base)
+    prep.input <- prep.input$base
+    
+    #results.dt <- merge(prep.input, model, by = "base")
+    results.dt <- model[base %in% prep.input]
+    #results.dt <- prep.input %>% 
+    #    left_join(model)
+    #results.dt <- results.dt[order(order)]
+    #results.dt <- results.dt[, norm.prob := prob ^ (1/order)]
+    result <- results.dt[prob == max(prob)]
+    result <- result[, actual.pred := dt[n.rows, pred]]
+    result <- result[, result := actual.pred == pred]
+    print(result)
 ```
 ```{r Read in model}
 # read in previously built model from file
@@ -240,7 +295,7 @@ validate_model <- function(dt = valid.pentagram, n.rows, model = ngrams.freq.15)
     #n.rows <- 100
     #model <- ngrams.freq.15
     
-    input <- str_replace_all(dt[n.rows, base, with = TRUE], "_", " ")
+    input <- str_replace_all(dt[["base"]][n.rows], "_", " ")
 
     n = 4:1
     patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
@@ -266,10 +321,18 @@ validate_model <- function(dt = valid.pentagram, n.rows, model = ngrams.freq.15)
 proc.time() - ptm # diff time
 
 ptm <- proc.time() # start time
-map(.x = 100, .f = validate_model)
+map(.x = 10030, .f = validate_model)
 validate_model(n.rows = 10030)
 proc.time() - ptm # diff time
 
+
+ptm <- proc.time() # start time
+merge(prep.input, ngrams.freq.15, by = "base")
+    #ngrams.freq.15[base %in% prep.input]
+    #ngrams.freq.15[base %in% prep.input]
+    #results.dt <- prep.input %>% 
+    #    left_join(model)
+proc.time() - ptm # diff time
 
 #test.output <- merge(prep.input, ngrams.freq.15, by = "base")
 test.output <- ngrams.freq.15[prep.input]
