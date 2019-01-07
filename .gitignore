@@ -7,3 +7,4 @@ output/
 data/temp.data/sample.en_us.blogs.txt
 data/temp.data/sample.en_us.news.txt
 data/temp.data/sample.en_us.twitter.txt
+Next_word_prediction/model.data
