@@ -148,6 +148,8 @@ test <- temp.test[!(temp.test %in% valid)]
 # remove unneeded objects
 rm(sample.blogs, sample.news, sample.twitter, temp.test)
 
+```
+```{r Create Model}
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
@@ -196,9 +198,36 @@ ngrams.freq <- setkey(ngrams.freq, base)
 
 # write resulting ngram to file
 fwrite(ngrams.freq, file = paste("../data/temp.data/ngrams.freq", sample.size, ".csv"))
-proc.time() - ptm
 
+getwd()
+# Save an object to file under the "next_word_prediction" app
+saveRDS(ngrams.freq.15, file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+# Restore the object
+ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
 
+# Save an object to file under the "next_word_prediction" app
+saveRDS(ngrams.freq.0.25, file = "./Next_word_prediction/model.data/ngrams.freq.25.rds")
+# Restore the object
+ng.25.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.25.rds")
+
+```
+```{r Read in model}
+# read in previously built model from file
+ptm <- proc.time() # start time
+getwd()
+ngrams.freq.15 <- read.csv(file = "./data/temp.data/ngrams.freq.15.csv")
+ngrams.freq.15 <- as.data.table(ngrams.freq.15)
+ngrams.freq.15 <- setkey(ngrams.freq.15, base)
+
+proc.time() - ptm # end time and difference
+
+ptm <- proc.time() # start time
+getwd()
+ngrams.freq.0.25 <- read.csv(file = "./data/temp.data/ngrams.freq 0.25 .csv")
+ngrams.freq.0.25 <- as.data.table(ngrams.freq.0.25)
+ngrams.freq.0.25 <- setkey(ngrams.freq.0.25, base)
+
+proc.time() - ptm # end time and difference
 ```
 ```{r prep validation data}
 # Prepare corpus by sentences
@@ -225,6 +254,9 @@ rm(pentagram, corpus.sentences)
 valid.pentagram.base <- valid.pentagram[["base"]]
 valid.pentagram.pred <- valid.pentagram[["pred"]]
 
+```
+```{r Evaluate model}
+# function to run validation data through model
 predict_next_word <- function(prev.words, model = ngrams.freq.15){
     string <- str_replace_all(prev.words, "_", " ")
     n = 4:1
@@ -236,106 +268,25 @@ predict_next_word <- function(prev.words, model = ngrams.freq.15){
     prep.input <- setkey(prep.input, base)
     prep.input <- prep.input$base
     results.dt <- model[base %in% prep.input]
-    #results.dt <- results.dt[order(order)]
-    #results.dt <- results.dt[, norm.prob := prob ^ (1/order)]
-    #result <- results.dt[order(-prob), pred] %>% as.character(.)
     result <- results.dt[order(-prob)[1], .(base, pred)]
-    #result <- result$pred
-    #result <- result[, actual.pred := dt[n.rows, pred]]
-    #result <- result[, result := actual.pred == pred]
     print(result)
     }
 
-predict_next_word(prev.words = valid.pentagram.base[589])
+ptm <- proc.time() # start time
+predict_next_word(prev.words = valid.pentagram.base[58912])
+proc.time() - ptm # end time and difference
 
-num.to.test <- 6000:6050
+
+num.to.test <- 1:1000
 model.test <- map_df(.x = valid.pentagram.base[num.to.test], .f = predict_next_word) %>%
     mutate(actual.pred = valid.pentagram.pred[num.to.test],
            result = pred == actual.pred)
-model.test %>% summarise(correct.pred.rate = sum(result)/length(result))
+model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
+                         no.pred = sum(is.na(result))/length(result))
 
-input <- str_replace_all(dt[["base"]][n.rows], "_", " ")
-
-    n = 4:1
-    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
-    test.input <- data.table(base = stri_extract(input, regex = patt))
-    test.input <- test.input[, order := length(test.input$base):1]
-    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
-        tolower(), with = TRUE] 
-    prep.input <- setkey(prep.input, base)
-    prep.input <- prep.input$base
-    
-    #results.dt <- merge(prep.input, model, by = "base")
-    results.dt <- model[base %in% prep.input]
-    #results.dt <- prep.input %>% 
-    #    left_join(model)
-    #results.dt <- results.dt[order(order)]
-    #results.dt <- results.dt[, norm.prob := prob ^ (1/order)]
-    result <- results.dt[prob == max(prob)]
-    result <- result[, actual.pred := dt[n.rows, pred]]
-    result <- result[, result := actual.pred == pred]
-    print(result)
-```
-```{r Read in model}
-# read in previously built model from file
 ptm <- proc.time() # start time
-
-ngrams.freq.15 <- read.csv(file = "../data/temp.data/ngrams.freq.15.csv")
-ngrams.freq.15 <- as.data.table(ngrams.freq.15)
-ngrams.freq.15 <- setkey(ngrams.freq.15, base)
-
+ngrams.freq.15[base == "given_that"]
 proc.time() - ptm # end time and difference
-```
-
-```{r Evaluate model}
-# function to run validation data through model
-validate_model <- function(dt = valid.pentagram, n.rows, model = ngrams.freq.15){
-#ptm <- proc.time() # start time    
-    #dt <- valid.pentagram
-    #n.rows <- 100
-    #model <- ngrams.freq.15
-    
-    input <- str_replace_all(dt[["base"]][n.rows], "_", " ")
-
-    n = 4:1
-    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
-    test.input <- data.table(base = stri_extract(input, regex = patt))
-    test.input <- test.input[, order := length(test.input$base):1]
-    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
-        tolower(), with = TRUE] 
-    prep.input <- setkey(prep.input, base)
-    prep.input <- prep.input$base
-    
-    #results.dt <- merge(prep.input, model, by = "base")
-    results.dt <- model[base %in% prep.input]
-    #results.dt <- prep.input %>% 
-    #    left_join(model)
-    #results.dt <- results.dt[order(order)]
-    #results.dt <- results.dt[, norm.prob := prob ^ (1/order)]
-    result <- results.dt[prob == max(prob)]
-    result <- result[, actual.pred := dt[n.rows, pred]]
-    result <- result[, result := actual.pred == pred]
-    print(result)
-    }
-    
-proc.time() - ptm # diff time
-
-ptm <- proc.time() # start time
-map(.x = 10030, .f = validate_model)
-validate_model(n.rows = 10030)
-proc.time() - ptm # diff time
-
-
-ptm <- proc.time() # start time
-merge(prep.input, ngrams.freq.15, by = "base")
-    #ngrams.freq.15[base %in% prep.input]
-    #ngrams.freq.15[base %in% prep.input]
-    #results.dt <- prep.input %>% 
-    #    left_join(model)
-proc.time() - ptm # diff time
-
-#test.output <- merge(prep.input, ngrams.freq.15, by = "base")
-test.output <- ngrams.freq.15[prep.input]
 
 ```
 
@@ -509,54 +460,11 @@ data.table(stri_split_fixed(test, "_", simplify = TRUE))
 ```
 # Ideas to improve accuracy and efficiency
 - 
-```{r}
-sample_code <- function() {
 
-  require(quanteda)
-
-  print(paste("based on","https://github.com/quanteda/quanteda/issues/1413#issuecomment-414795832"))
-  print("great package great support, thanks")
-
-  ngms <- tokens("a b 1 2 3 a b 2 3 4 a b 3 4 5", n = 2:5)
-
-  # get rid of tokens metadata not necessary for our UC
-  ngms_lst <-  as.list(ngms)
-  ngms_unlst  <- unlist(ngms_lst) # (named) character with _ sep. ngrams
-
-  # split in " "-separated pairs:  "n-1 tokens", "nth token"
-  ngms_blank_sep <- stringi::stri_replace_last_fixed(ngms_unlst,"_", " ")
-
-  # list of character(2)  ( (n-1)gram ,nth token )
-  tk2_lst <- tokens(ngms_blank_sep)
-
-  # --- end of tokens/ngrams pre-processing
-
-  # ordinary fcm
-  fcm_ord <- fcm(tk2_lst , ordered = TRUE)
-
-  fcm_ord[33:39, 1:6]
-}
-
-
-sample_code()
-[1] "based on https://github.com/quanteda/quanteda/issues/1413#issuecomment-414795832"
-[1] "great package great support, thanks"
-Feature co-occurrence matrix of: 7 by 6 features.
-7 x 6 sparse Matrix of class "fcm"
-         features
-features  a b 1 2 3 4
-  3_a_b_2 0 0 0 0 1 0
-  a_b_2_3 0 0 0 0 0 1
-  b_2_3_4 1 0 0 0 0 0
-  2_3_4_a 0 1 0 0 0 0
-  3_4_a_b 0 0 0 0 1 0
-  4_a_b_3 0 0 0 0 0 1
-  a_b_3_4 0 0 0 0 0 0   
-```
 ```{r dfm tests}
 text.test <- c("Hello my friend how are you doing today.", "Please come to my office to recieve your pay check. That would be a good time.", "Give me a call when you have the chance.", "Hello my friend how are you doing today.", "Please come to my office to recieve your pay check. That would be a good time.", "Give me a call when you have the chance.", "Give me a call when you have the chance.")
 
-# Prepare corpus by sentences---------------------------------------------------
+# Prepare corpus by sentences
 corpus.sentences <- corpus(text.test) %>%
     corpus_reshape(., to = "sentence") 
 
