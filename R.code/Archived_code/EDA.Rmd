@@ -1,0 +1,509 @@
+---
+title: "Getting_n_cleaning_data"
+author: "Joe Rubash"
+date: "November 28, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Todo:
+- ensure that file has been read in correctly
+- where are the tags for the corporas that was mentioned?
+- figureout how to remove bad language
+- consider changing sample data back to text file then read text... may be faster
+
+# ##############################################################################
+```{r setup - loading and formating data}
+# global settings for chunks
+knitr::opts_chunk$set(echo=FALSE)
+
+# clear environment
+rm(list = ls())
+
+getwd()
+
+source("./Loading_cleaning_data.R")
+```                            
+# ##############################################################################
+
+# Quiz week 1
+```{r longest lines}
+# longest lines in data sets
+longest_lines <- function(x, y){
+    x %>% 
+        mutate(char.in.line = nchar(txt_sample))%>% 
+        mutate(source = y) %>%
+        arrange(desc(char.in.line)) %>% 
+        head(n = 1)
+}
+map2_df(.x = data.list,
+       .y = sources,
+       .f = longest_lines) %>%
+    select(source, char.in.line)
+```
+```{r love vs hate}
+lines_love <- data.twitter %>% 
+    mutate(love = str_detect(txt_sample, "love"))%>%
+    summarise(love_by_line = sum(love)) %>% 
+    filter(love_by_line != 0)
+
+lines_hate <- data.twitter %>% 
+    mutate(hate = str_detect(txt_sample, "hate"))%>%
+    summarise(hate_by_line = sum(hate)) %>% 
+    filter(hate_by_line != 0)
+
+
+lines_love$love_by_line / lines_hate$hate_by_line
+
+```
+```{r biostats tweet}
+data.raw.twitter[str_which(data.raw.twitter, " biostats ")]
+
+```
+
+```{r number tweets matching phrase}
+str_which(data.raw.twitter,
+          "A computer once beat me at chess, but it was no match for me at kickboxing") %>%
+    length()
+
+# remove original data
+rm(data.raw.twitter)
+```
+#.
+# Exploration
+## Expectations in data:
+- expecting words to be spelled correctly... most likely not true
+- expecting tokenizer to correctly split words and drop punctuation... mostlikely not true
+
+## Tasks to accomplish
+
+- Exploratory analysis - perform a thorough exploratory analysis of the data, understanding the distribution of words and relationship between the words in the corpora.
+- Understand frequencies of words and word pairs - build figures and tables to understand variation in the frequencies of words and word pairs in the data.
+
+## Questions to consider
+- Some words are more frequent than others - what are the distributions of word frequencies?
+- What are the frequencies of 2-grams and 3-grams in the dataset?
+- How many unique words do you need in a frequency sorted dictionary to cover 50% of all word instances in the language? 90%?
+- How do you evaluate how many of the words come from foreign languages?
+- Can you think of a way to increase the coverage -- identifying words that may not be in the corpora or using a smaller number of words in the dictionary to cover the same number of phrases?
+```{r missing data?}
+data.list <- list(data.blogs, data.news, data.twitter)
+
+map(data.list, summary)
+```
+```{r ---Unigram tokens all data-------}
+# Add line variable to data----
+all.data.blogs <- tibble(line = 1:length(data.raw.blogs),
+                     txt_sample = data.raw.blogs)
+all.data.news <- tibble(line = 1:length(data.raw.news),
+                    txt_sample = data.raw.news)
+all.data.twitter <- tibble(line = 1:length(data.raw.twitter),
+                       txt_sample = data.raw.twitter)
+
+# Tokenize to individual words
+unigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "words",
+                        to_lower = TRUE)
+    df.names <- paste("all.data.unigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+raw.data.list <- list(all.data.blogs,
+                      all.data.news,
+                      all.data.twitter)
+sources <- c("blogs",
+             "news",
+             "twitter")
+
+map2(.x = raw.data.list, .y = sources, .f = unigram_tokens)
+```
+```{r data summary stats}
+raw.data.list <- list(data.raw.blogs,
+                      data.raw.news,
+                      data.raw.twitter)
+sources <- c("blogs",
+             "news",
+             "twitter")
+all.data.unigram <- list(all.data.unigram.blogs,
+                         all.data.unigram.news,
+                         all.data.unigram.twitter)
+
+raw_data_summary_stats <- function(x, y, z){
+    num.lines <- length(x)
+    data.size <- object.size(x) %>% 
+        as.character() %>% 
+        as.numeric()/1000000
+    unique.words <- z %>% 
+        count(words, sort = TRUE) %>% 
+        nrow()
+    data.source <- y
+    df <- data.frame(data.source,
+                     data.size,
+                     num.lines,
+                     unique.words)
+}
+
+pmap_df(.l = list(raw.data.list,
+                  sources,
+                  all.data.unigram),
+        .f = raw_data_summary_stats)
+```
+```{r ---Unigram tokens-------}
+# Tokenize to individual words
+unigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "words",
+                        to_lower = TRUE)
+    df.names <- paste("data.unigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = unigram_tokens)
+```
+
+```{r proportion miss spelled words?}
+
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = function(x, y){
+            x %>% mutate(correct.spelling = hunspell_check(words)) %>%
+                summarise(prop.spelling.errors = (dim(x)[1] - sum(correct.spelling))/dim(x)[1]) %>% 
+                mutate(source = y)
+            }) %>% 
+    ggplot(aes(x = source,
+               y = prop.spelling.errors,
+               fill = source))+
+    geom_col(position = "dodge")+
+    scale_y_continuous(labels = percent)+
+    coord_cartesian(ylim = c(0, 1))
+
+```
+```{r proportion miss spelled not english?}
+
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = function(x, y){
+            length.data <- dim(x)[1]
+            
+            miss.spell.en <- x %>%
+                mutate(correct.spelling = hunspell_check(words),
+                       lang = detect_language(words)) %>%
+                filter(correct.spelling == FALSE &
+                           lang != "en") %>% 
+                summarise(n = n(),
+                          prop.miss.en = n/length.data) %>% 
+                mutate(source = y)
+            })
+```
+```{r most common miss spelled words}
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+most_miss_spell <- function(x, y){
+    x %>%
+        mutate(correct.spelling = hunspell_check(words)) %>%
+        filter(correct.spelling == FALSE) %>%
+        count(words, sort = TRUE) %>% 
+        mutate(source = y) %>% 
+        head(n = 10)
+    }
+
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = most_miss_spell) %>%
+    ggplot(aes(x = fct_reorder(words, n), y = n, fill = source))+
+    geom_col(position = position_dodge())+
+    facet_wrap(~ source, scales = "free_y")+
+    coord_flip()
+
+```
+```{r most common miss spelled english}
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+most_miss_spell_english <- function(x, y){
+    x %>%
+        mutate(correct.spelling = hunspell_check(words),
+               lang = detect_language(words)) %>%
+        filter(correct.spelling == FALSE &
+                   lang == "en") %>%
+        count(words, sort = TRUE) %>% 
+        mutate(source = y) %>% 
+        head(n = 10)
+    }
+
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = most_miss_spell_english) %>%
+    ggplot(aes(x = fct_reorder(words, n), y = n, fill = source))+
+    geom_col(position = position_dodge())+
+    facet_wrap(~ source,  scales = "free")+
+    coord_flip()
+
+#test <- most_com_miss_spell(data.blogs, "blogs")
+```
+```{r proportion of languages}
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter") 
+
+prop_lang <- function(x, y){
+    x %>% 
+        mutate(lang = detect_language(words)) %>% 
+        group_by(lang) %>% 
+        summarise(n = n()) %>% 
+        mutate(freq = n / sum(n),
+               source = y) %>% 
+        arrange(desc(freq)) %>% 
+        top_n(freq, n = 5)
+}
+
+windows()
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = prop_lang) %>% 
+    ggplot(aes(x = lang,
+               y = freq,
+               fill = source))+
+    geom_col(position = position_dodge())+
+    coord_flip()+
+    facet_wrap(~ source, scales = "free")
+
+```
+
+```{r dist of line lengths using purrr}
+nwords <- function(x, y){
+    x%>%
+    group_by(line) %>% 
+    summarise(nwords = n()) %>% 
+    mutate(source = y)
+}
+
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter")
+
+map2_df(.x = data.list, .y = sources, .f = nwords) %>% 
+    ggplot(aes(x = nwords, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)+
+    geom_rug()+
+    scale_x_log10()
+```
+
+```{r distribution of word occurances}
+data.list <- list(data.blogs, data.news, data.twitter)
+sources <- c("blogs", "news", "twitter")
+
+most_common_words <- function(x, y){
+    x %>%
+        count(words, sort = TRUE) %>%
+        mutate(source = y)
+    }
+        
+map2_df(.x = data.list, .y = sources, .f = most_common_words)%>% 
+    ggplot(aes(x = n, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)
+    
+
+```
+```{r dist of word occurances log scale}
+data.unigram.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter")
+
+most_common_words <- function(x, y){
+    x %>%
+        count(words, sort = TRUE) %>%
+        mutate(source = y)
+    }
+        
+map2_df(.x = data.unigram.list, .y = sources, .f = most_common_words)%>% 
+    ggplot(aes(x = n, fill = source))+
+    facet_grid(source ~ .)+
+    geom_histogram(bins = 100)+
+    #geom_rug()+
+    scale_x_log10()+
+    scale_y_log10()
+
+```
+```{r cummulative most freq words}
+# determine the relationship of number of unique words to percent of data set they
+# represent
+data.token.1.list <- list(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+sources <- c("blogs", "news", "twitter")
+
+
+perc_unique_words_cover <- function(x, y){
+    x %>% 
+    count(words, sort = TRUE) %>%
+    mutate(cum.sum = cumsum(n),
+           perc.total = cum.sum/nrow(x),
+           top.word.n = 1:nrow(.),
+           perc.unique.words = top.word.n/nrow(.),
+           source = y)
+    }
+
+map2_df(.x = data.token.1.list,
+        .y = sources,
+        .f = perc_unique_words_cover) %>% 
+    ggplot(aes(x = perc.unique.words, 
+               y = perc.total,
+               color = source))+
+    geom_point()+
+    geom_hline(yintercept = c(0.5, 0.9), linetype = 2)+
+    scale_y_continuous(labels = percent)+
+    scale_x_continuous(labels = percent)+
+    facet_grid(. ~ source)
+```
+```{r ---Bigram tokens--------}
+# determine top 10 words
+top.first.words.blogs <- most_common_words(data.unigram.blogs, "blogs") %>% 
+    top_n(n, n=10)
+
+# remove unigram data sets to save memory
+rm(data.unigram.blogs, data.unigram.news, data.unigram.twitter)
+
+# Tokenize to two word groups
+bigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 2,
+                        to_lower = TRUE)
+    df.names <- paste("data.bigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = bigram_tokens)
+```
+
+```{r two word frequency dist in blogs}
+
+most.freq.2nd.word <- data.bigram.blogs %>% 
+    separate(words, " ", into = c("first.word", "second.word")) %>% 
+    group_by(first.word) %>% 
+    count(second.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(second.word, first.word, sep = "_")) %>%
+    filter(first.word %in% top.first.words.blogs$words) %>% 
+    ungroup() %>% 
+    arrange(first.word, n) %>% 
+    mutate(.r = row_number())
+
+#windows()
+    ggplot(data = most.freq.2nd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.word))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.2nd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.2nd.word$second.word) +
+    coord_flip()+
+    facet_wrap(~ first.word, scales = "free")
+
+```
+```{r two word frequency dist in news}
+
+most.freq.2nd.word <- data.bigram.news %>% 
+    separate(words, " ", into = c("first.word", "second.word")) %>% 
+    group_by(first.word) %>% 
+    count(second.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(second.word, first.word, sep = "_")) %>%
+    filter(first.word %in% top.first.words.news$words) %>% 
+    ungroup() %>% 
+    arrange(first.word, n) %>% 
+    mutate(.r = row_number())
+
+#windows()
+    ggplot(data = most.freq.2nd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.word))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.2nd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.2nd.word$second.word) +
+    coord_flip()+
+    facet_wrap(~ first.word, scales = "free")
+
+```
+```{r ---Trigram tokens--------}
+# create list of top ten two word combinations
+top.first.2.words.blogs <- data.bigram.blogs %>% 
+    count(words, sort = TRUE) %>% 
+    top_n(n, n=10)
+
+# remove bigram token data sets to save memory
+rm(data.bigram.blogs, data.bigram.news, data.bigram.twitter)
+
+# Tokenize to three word groups
+trigram_tokens <- function(x, y){
+    df <- unnest_tokens(tbl = x,
+                        output = words,
+                        input = txt_sample,
+                        token = "ngrams",
+                        n = 3,
+                        to_lower = TRUE)
+    df.names <- paste("data.trigram", y, sep = ".")
+    assign(df.names, df, envir = .GlobalEnv)
+    }
+
+map2(.x = data.list, .y = sources, .f = trigram_tokens)
+```
+```{r three word frequency dist in blogs}
+
+most.freq.3rd.word <- data.trigram.blogs %>% 
+    mutate(first.2.words = str_remove(words, " [[:alpha:]]*$"),
+           third.word = str_extract(words, " [[:alpha:]]*$")%>% 
+               str_remove(., " "))  %>% 
+    group_by(first.2.words) %>% 
+    count(third.word, sort = TRUE) %>% 
+    top_n(n, n = 5) %>%
+    mutate(temp = paste(third.word, first.2.words, sep = "_")) %>%
+    filter(first.2.words %in% top.first.2.words.blogs$words) %>% 
+    ungroup() %>% 
+    arrange(first.2.words, n) %>% 
+    mutate(.r = row_number())
+
+windows()
+    ggplot(data = most.freq.3rd.word,
+           aes(x = .r,
+               y = n,
+               fill = first.2.words))+
+    geom_col(position = position_dodge())+
+    scale_x_continuous(  # This handles replacement of .r for x
+    breaks = most.freq.3rd.word$.r,     # notice need to reuse data frame
+    labels = most.freq.3rd.word$third.word) +
+    coord_flip()+
+    facet_wrap(~ first.2.words, scales = "free")
+
+    
+    sub(df1$city, pattern = " [[:alpha:]]*$", replacement = "")
+    
+x <- data.frame(line = 1:3, text = c("given this set", "testing that set", "another test two"))    
+test <- x %>% 
+    mutate(first.2.words = str_remove(text, " [[:alpha:]]*$"),
+           third.word = str_extract(text, " [[:alpha:]]*$")%>% 
+               str_remove(., " ")
+           ) 
+    
+print(test$first.2.words)
+print(test$third.word)
+
+
+```
+# Plan to model word data to predict next word:
