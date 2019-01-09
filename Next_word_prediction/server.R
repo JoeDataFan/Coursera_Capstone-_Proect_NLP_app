@@ -6,6 +6,7 @@
 # 
 #    http://shiny.rstudio.com/
 #
+#getwd()
 
 library(shiny)
 
@@ -18,12 +19,12 @@ library(shiny)
                                           #str_remove_all(., "_$"), pred]
             
             # function to run string through model
-            predict_next_word <- function(prev.words, model = ng.25.model){
+            predict_next_word <- function(prev.words, model = ng.model){
                 n = 4:1
                 patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
                 test.input <- data.table(base = stri_extract(prev.words, regex = patt))
                 test.input <- test.input[, order := length(test.input$base):1]
-                prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
+                prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
                                              str_replace(., "_$", "") %>% 
                                              tolower()] 
                 prep.input <- setkey(prep.input, base)

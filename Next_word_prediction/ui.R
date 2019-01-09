@@ -15,3 +15,4 @@ ui <- fluidPage(
     textInput("previous.words", "Previous words"),
     textInput("inText", "Predicted next word")
 )
+#getwd()
