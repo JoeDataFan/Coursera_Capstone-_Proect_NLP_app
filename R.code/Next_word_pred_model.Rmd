@@ -96,7 +96,41 @@ create_ngrams <- function(corpus, ngrams){
                               include_docvars = TRUE) %>% 
     tokens_tolower(.) %>% 
     unlist(., use.names = FALSE)
+}
+
+dfm_ngrams <- function(corpus, ngrams){
+    dfm(corpus, what = "word",
+        tolower = TRUE,
+        remove_numbers = TRUE,
+        remove_punct = TRUE,
+        remove_symbols = TRUE,
+        remove_separators = TRUE,
+        remove_twitter = TRUE, 
+        remove_hyphens = TRUE,
+        remove_url = TRUE,
+        ngrams = ngrams,
+        skip = 0L,
+        concatenator = "_",
+        verbose = quanteda_options("verbose")) %>% 
+        colSums(.)
     }
+
+# need to continue working on this function... this is the final piece to take colSum(dfm) data (basically the count of how often base and pred combinations occur) then split to base and pred, cound the number of unique base_pred for a given base then calc probabilities and perhaps tf-id????
+split_base_pred_freq <- function(dfm.ngram){
+    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
+    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+    dt <- dt[, feats := NULL]
+    dt <- setkey(dt, base)
+    dt <- dt[, := base.count = sum(count), key = base]
+    dt <- dt[count > 1]
+    dt <- dt[, prob := count / base.count]
+    dt <- dt[ , .SD[which.max(count)], # how could I keep top 2 or 3 counts for each base?
+              key = base]
+    return(dt)
+}
+
 
 # Model data
 # convert to data.table then split bigram into base and prediction
@@ -147,20 +181,20 @@ all.text <- c(blogs, news, twitter)
 # remove unneeded objects
 rm(blogs, news, twitter)
 
-sample.size <- 0.25 # delete sample files and rerun code if changing sample size
+sample.size <- 0.50 # delete sample files and rerun code if changing sample size
 valid.size <- 0.05
 test.size <- 0.05
 
 # split all.text into training, validation and test
 set.seed(123)
-training <- sample(all.text,
-                   size = sample.size * length(all.text),
-                   replace = FALSE)
-valid <- sample(all.text[-which(training %in% all.text)],
+valid <- sample(all.text,
                    size = valid.size * length(all.text),
-                   replace = FALSE) 
-test <- sample(all.text[-which(c(training, valid) %in% all.text)],
+                   replace = FALSE)
+test <- sample(all.text[-which(valid %in% all.text)],
                    size = test.size * length(all.text),
+                   replace = FALSE) 
+training <- sample(all.text[-which(c(valid, test) %in% all.text)],
+                   size = sample.size * length(all.text),
                    replace = FALSE) 
 
 # remove unneeded objects
@@ -168,80 +202,24 @@ rm(all.text)
 
 # Clean data--------------------------------------------------------------------
 # remove extra spaces between words
-sample.text <- sample.text %>% 
+training <- training %>% 
     str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
-    
-```
-```{r Model 15% sample no trim} 
-# Sample data 
-# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
-sample.size <- 0.25 # delete sample files and rerun code if changing sample size
-
-# read in and sample all text data
-sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
-sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
-sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
-
-# Combine all text samples
-sample.text <- c(sample.blogs, sample.news, sample.twitter) 
-
-# split sample.text into train, validation and test
-set.seed(123)
-training <- sample(sample.text, size = 0.90 * length(sample.text))
-temp.test <- sample.text[!(sample.text %in% training)]
-valid <- sample(temp.test, size = 0.5 * length(temp.test))
-test <- temp.test[!(temp.test %in% valid)]
-
-# remove unneeded objects
-rm(sample.blogs, sample.news, sample.twitter, temp.test)
-
-# Clean data
-# remove extra spaces between words
-sample.text <- sample.text %>% 
-    str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
-    
 
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
 
-# Alter function slightly
-split_base_pred_freq <- function(ngram){
-    dt <- data.table(text = ngram)
-    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
-    dt <- dt[, c("base", "pred") 
-      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
-    dt <- dt[, text := NULL]
-    dt <- setkey(dt, base)
-    dt <- dt[, ":=" (count = uniqueN(pred),
-               base.count = .N),
-             key = base]
-    #dt <- dt[count > 1]
-    dt <- dt[, prob := count / base.count]
-    dt <- dt[ , .SD[which.max(count)],
-              key = base]
-    return(dt)
-}
-
-
-
-no_cores <- detectCores() - 1
-print(no_cores)
-# Initiate cluster
-cl <- makeCluster(no_cores)
-registerDoParallel(cl)
-
 # Prepare corpus by sentences---------------------------------------------------
-corpus.sentences <- corpus(training) %>%
+corpus.sentences <- corpus(test) %>%
     corpus_reshape(., to = "sentence") 
-stopCluster(cl)
-
-library("quanteda")
-quanteda_options(threads = 2)
-quanteda_options("threads")
-sessionInfo()
 
 # Create ngram frequencies data table-------------------------------------------
+
+bigrams.test <- dfm_ngrams(corpus = corpus.sentences, ngrams = 2)
+dt.bigram.test <- data.table(base = names(bigrams.test),
+                             count = colSums(bigrams.test),
+                             row.names = NULL,
+                             stringsAsFactors = FALSE)
 
 # unigrams
 unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
