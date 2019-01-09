@@ -1,0 +1,201 @@
+---
+title: "15% of text 5 to 1 ngram simple backoff no trimming"
+author: "Joe Rubash"
+date: "January 8, 2019"
+output: html_document
+---
+
+# plan of attack ("make it work", "make it right", "make it fast")
+Stage one - make a simple model using calculated frequencies from n-grams
+1. read in data and make a corpus with all sources
+2. to start out sample a small portion of this corpus
+3. use qunteda package to create unigram (to lower case, strip punc, remove extra 
+white space. etc)
+4. create a dictionary to assign integer to unique words in unigram
+5. build unigram, bigram and trigram document term matrices
+6. split ngrams to give previous word(s) and next word (to predict)
+7. calc frequencies
+8. to colsum of frequencies to
+9. create backoff method to start with highest order n-gram then move to lowest
+order n-gram if no solution found
+10. create method to evaluate accuracy and efficiency of model. Make this easy to 
+run so I can later itterate quickly through different ideas to improve
+
+
+stage two use smoothing to improve prediction and various methods to spee up
+8. figure out how to alter frequencies to predict unkowns
+9. su
+
+```{r setup}
+# clear environment
+rm(list = ls())
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# required libraries
+library(tidyverse)
+library(readr)
+library(readtext)
+library(purrr)
+library(quanteda)
+library(tm)
+library(data.table)
+library(stringi)
+library(stringr)
+library(knitr)
+library(rbenchmark)
+library(doParallel)
+library(R.utils)
+
+# Functions---------------------------------------------------------------------
+
+# Generic function for parallelizing any task (when possible)
+parallelizeTask <- function(task, ...) {
+  # Calculate the number of cores
+  ncores <- detectCores() - 1
+  # Initiate cluster
+  cl <- makeCluster(ncores)
+  registerDoParallel(cl)
+  #print("Starting task")
+  r <- task(...)
+  #print("Task done")
+  stopCluster(cl)
+  r
+}
+
+# create function to read in convert, sample then write to file text data
+sample_data <- function(file){
+    readLines(con = file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE)
+    }
+
+# Functions to create ngrams and then calculate frequencies
+# Create ngrams
+create_ngrams <- function(corpus, ngrams){
+    tokens(corpus, what = "word",
+                              remove_numbers = TRUE,
+                              remove_punct = TRUE,
+                              remove_symbols = TRUE,
+                              remove_separators = TRUE,
+                              remove_twitter = TRUE, 
+                              remove_hyphens = TRUE,
+                              remove_url = TRUE,
+                              ngrams = ngrams,
+                              skip = 0L,
+                              concatenator = "_",
+                              verbose = quanteda_options("verbose"),
+                              include_docvars = TRUE) %>% 
+    tokens_tolower(.) %>% 
+    unlist(., use.names = FALSE)
+    }
+
+# Model data
+# convert to data.table then split bigram into base and prediction
+split_base_pred_freq <- function(ngram){
+    dt <- data.table(text = ngram)
+    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+    dt <- dt[, text := NULL]
+    dt <- setkey(dt, base)
+    dt <- dt[, ":=" (count = uniqueN(pred),
+               base.count = .N),
+             key = base]
+    dt <- dt[, prob := count / base.count]
+    dt <- dt[ , .SD[which.max(count)],
+              key = base]
+    return(dt)
+}
+
+
+# Download data-----------------------------------------------------------------
+# download and unzip data folder
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+# Sample data------------------------------------------------------------------
+# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
+sample.size <- 0.15 # delete sample files and rerun code if changing sample size
+
+# create function to read in convert, sample then write to file text data
+sample_data <- function(file){
+    readLines(con = file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE)
+    }
+
+# read in and sample all text data
+sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
+sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+
+# Combine all text samples
+sample.text <- c(sample.blogs, sample.news, sample.twitter) 
+
+# remove unneeded objects
+rm(sample.blogs, sample.news, sample.twitter)
+
+# Create model -----------------------------------------------------------------
+# the following code seems to work well to create unigram and bigram tokens from 
+# combined text. The tokens can then be converted from lists to a single character
+# vector.
+
+# Prepare corpus by sentences---------------------------------------------------
+corpus.sentences <- corpus(training) %>%
+    corpus_reshape(., to = "sentence") 
+
+# Create ngram frequencies data table-------------------------------------------
+# unigrams
+unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
+unigram.dt <- data.table(text = unigram)
+unigram.dt <- unigram.dt[, count := .N, by = text]
+unigram.dt <- unigram.dt[, prob := count / length(unigram.dt$count)]
+unigram.dt <- unigram.dt[order(count, decreasing = TRUE)]
+unigram.dt <- unique(unigram.dt)
+
+# bigrams
+# start by initiating all cores for parallel processing
+bigram <- create_ngrams(corpus = corpus.sentences, ngrams = 2L)
+bigram.freq <- split_base_pred_freq(ngram = bigram)
+rm(bigram)
+
+# trigrams
+trigram <- create_ngrams(corpus = corpus.sentences, ngrams = 3L)
+trigram.freq <- split_base_pred_freq(ngram = trigram)
+rm(trigram)
+
+# quadgrams
+quadgram <- create_ngrams(corpus = corpus.sentences, ngrams = 4L)
+quadgram.freq <- split_base_pred_freq(ngram = quadgram)
+rm(quadgram)
+
+# pentagrams
+pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
+pentagram.freq <- split_base_pred_freq(ngram = pentagram)
+rm(pentagram, corpus.sentences)
+
+# combine ngrams
+ngram.list <- list(bigram.freq, trigram.freq, quadgram.freq, pentagram.freq)
+ngrams.freq <- rbindlist(ngram.list)
+rm(ngram.list, bigram.freq, trigram.freq, quadgram.freq, pentagram.freq)
+ngrams.freq <- setkey(ngrams.freq, base)
+
+# Save model to file -----------------------------------------------------------
+# save object to file under the "next_word_prediction" app
+saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+# Restore the object
+#ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+
+```
