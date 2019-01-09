@@ -50,6 +50,8 @@ library(rbenchmark)
 library(doParallel)
 library(R.utils)
 
+quanteda_options(threads = 3)
+
 # Functions---------------------------------------------------------------------
 
 # Generic function for parallelizing any task (when possible)
@@ -67,14 +69,14 @@ parallelizeTask <- function(task, ...) {
 }
 
 # create function to read in convert, sample then write to file text data
-sample_data <- function(file){
-    readLines(con = file,
-              skipNul = TRUE,
-              encoding="UTF-8") %>%
-    sample(.,
-           size = sample.size * length(.),
-           replace = FALSE)
-    }
+#sample_data <- function(file){
+#    readLines(con = file,
+#              skipNul = TRUE,
+#              encoding="UTF-8") %>%
+#    sample(.,
+#           size = sample.size * length(.),
+#           replace = FALSE)
+#    }
 
 # Functions to create ngrams and then calculate frequencies
 # Create ngrams
@@ -126,7 +128,52 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
-# Sample data------------------------------------------------------------------
+# Sample and slpit into train, validate and test data------------------------------------------------------------------
+
+# read in all text data
+blogs <- readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                   skipNul = TRUE,
+                   encoding="UTF-8")
+news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+                  skipNul = TRUE,
+                  encoding="UTF-8")
+twitter <-  readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                      skipNul = TRUE,
+                      encoding="UTF-8")
+
+# Combine all text data
+all.text <- c(blogs, news, twitter) 
+
+# remove unneeded objects
+rm(blogs, news, twitter)
+
+sample.size <- 0.25 # delete sample files and rerun code if changing sample size
+valid.size <- 0.05
+test.size <- 0.05
+
+# split all.text into training, validation and test
+set.seed(123)
+training <- sample(all.text,
+                   size = sample.size * length(all.text),
+                   replace = FALSE)
+valid <- sample(all.text[-which(training %in% all.text)],
+                   size = valid.size * length(all.text),
+                   replace = FALSE) 
+test <- sample(all.text[-which(c(training, valid) %in% all.text)],
+                   size = test.size * length(all.text),
+                   replace = FALSE) 
+
+# remove unneeded objects
+rm(all.text)
+
+# Clean data--------------------------------------------------------------------
+# remove extra spaces between words
+sample.text <- sample.text %>% 
+    str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
+    
+```
+```{r Model 15% sample no trim} 
+# Sample data 
 # define sample size, read in all english data files, sample, combine, add lines and save to file as csv
 sample.size <- 0.25 # delete sample files and rerun code if changing sample size
 
@@ -148,16 +195,51 @@ test <- temp.test[!(temp.test %in% valid)]
 # remove unneeded objects
 rm(sample.blogs, sample.news, sample.twitter, temp.test)
 
-```
-```{r Create Model}
+# Clean data
+# remove extra spaces between words
+sample.text <- sample.text %>% 
+    str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
+    
+
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
 
+# Alter function slightly
+split_base_pred_freq <- function(ngram){
+    dt <- data.table(text = ngram)
+    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+    dt <- dt[, text := NULL]
+    dt <- setkey(dt, base)
+    dt <- dt[, ":=" (count = uniqueN(pred),
+               base.count = .N),
+             key = base]
+    #dt <- dt[count > 1]
+    dt <- dt[, prob := count / base.count]
+    dt <- dt[ , .SD[which.max(count)],
+              key = base]
+    return(dt)
+}
+
+
+
+no_cores <- detectCores() - 1
+print(no_cores)
+# Initiate cluster
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+
 # Prepare corpus by sentences---------------------------------------------------
 corpus.sentences <- corpus(training) %>%
     corpus_reshape(., to = "sentence") 
+stopCluster(cl)
 
+library("quanteda")
+quanteda_options(threads = 2)
+quanteda_options("threads")
+sessionInfo()
 
 # Create ngram frequencies data table-------------------------------------------
 
@@ -196,100 +278,12 @@ ngrams.freq <- rbindlist(ngram.list)
 rm(ngram.list, bigram.freq, trigram.freq, quadgram.freq, pentagram.freq)
 ngrams.freq <- setkey(ngrams.freq, base)
 
-# write resulting ngram to file
-fwrite(ngrams.freq, file = paste("../data/temp.data/ngrams.freq", sample.size, ".csv"))
-
-getwd()
 # Save an object to file under the "next_word_prediction" app
 saveRDS(ngrams.freq.15, file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
 # Restore the object
-ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
-
-# Save an object to file under the "next_word_prediction" app
-saveRDS(ngrams.freq.0.25, file = "./Next_word_prediction/model.data/ngrams.freq.25.rds")
-# Restore the object
-ng.25.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.25.rds")
+#ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
 
 ```
-```{r Read in model}
-# read in previously built model from file
-ptm <- proc.time() # start time
-getwd()
-ngrams.freq.15 <- read.csv(file = "./data/temp.data/ngrams.freq.15.csv")
-ngrams.freq.15 <- as.data.table(ngrams.freq.15)
-ngrams.freq.15 <- setkey(ngrams.freq.15, base)
-
-proc.time() - ptm # end time and difference
-
-ptm <- proc.time() # start time
-getwd()
-ngrams.freq.0.25 <- read.csv(file = "./data/temp.data/ngrams.freq 0.25 .csv")
-ngrams.freq.0.25 <- as.data.table(ngrams.freq.0.25)
-ngrams.freq.0.25 <- setkey(ngrams.freq.0.25, base)
-
-proc.time() - ptm # end time and difference
-```
-```{r prep validation data}
-# Prepare corpus by sentences
-corpus.sentences <- corpus(valid) %>%
-    corpus_reshape(., to = "sentence") 
-
-# Create pentagrams for validation
-pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
-
-# split pentagram into base and prediction
-split_base_pred <- function(ngram){
-    dt <- data.table(text = ngram)
-    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
-    dt <- dt[, c("base", "pred") 
-      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
-    dt <- dt[, text := NULL]
-    dt <- setkey(dt, base)
-    }
-    
-valid.pentagram <- split_base_pred(ngram = pentagram)
-rm(pentagram, corpus.sentences)
-
-# further prepare validation data for entry into prediction algorithm
-valid.pentagram.base <- valid.pentagram[["base"]]
-valid.pentagram.pred <- valid.pentagram[["pred"]]
-
-```
-```{r Evaluate model}
-# function to run validation data through model
-predict_next_word <- function(prev.words, model = ngrams.freq.15){
-    string <- str_replace_all(prev.words, "_", " ")
-    n = 4:1
-    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
-    test.input <- data.table(base = stri_extract(string, regex = patt))
-    test.input <- test.input[, order := length(test.input$base):1]
-    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s", "_") %>% 
-        tolower()] 
-    prep.input <- setkey(prep.input, base)
-    prep.input <- prep.input$base
-    results.dt <- model[base %in% prep.input]
-    result <- results.dt[order(-prob)[1], .(base, pred)]
-    print(result)
-    }
-
-ptm <- proc.time() # start time
-predict_next_word(prev.words = valid.pentagram.base[58912])
-proc.time() - ptm # end time and difference
-
-
-num.to.test <- 1:1000
-model.test <- map_df(.x = valid.pentagram.base[num.to.test], .f = predict_next_word) %>%
-    mutate(actual.pred = valid.pentagram.pred[num.to.test],
-           result = pred == actual.pred)
-model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
-                         no.pred = sum(is.na(result))/length(result))
-
-ptm <- proc.time() # start time
-ngrams.freq.15[base == "given_that"]
-proc.time() - ptm # end time and difference
-
-```
-
 
 # Thoughts and todo:
 - learn how to use multiple cores (parallel processing)
@@ -300,72 +294,6 @@ need to remove bad words... perhaps I can group by sentences then remove sentenc
 - determine frequencies for each base / predict word pair
 - combine all data and save to file
 - create program to run predictions using backoff method. start at 5 grams then end with most common unigram work if no solution is found
-
-
-
-```{r week 3 quiz}
-# 1. The guy in front of me just bought a pound of bacon, a bouquet, and a case of
-# soda
-# beer - answer good
-# cheese
-# pretzels
-
-# 2. You're the reason why I smile everyday. Can you follow me please? It would mean the
-# universe
-# most
-# best
-# world - answer good
-
-# 3. Hey sunshine, can you follow me and make me the
-# saddest
-# smelliest
-# happiest - answer no
-# bluest
-
-# 4. Very early observations on the Bills game: Offense still struggling but the
-# crowd
-# players
-# referees
-# defense - answer no
-
-# 5. Go on a romantic date at the
-# mall
-# beach - answer no
-# grocery
-# movies
-
-# 6. Well I'm pretty sure my granny has some old bagpipes in her garage I'll dust them off and be on my
-# phone
-# way - answer close (would work if I dropped count under 2)
-# horse
-# motorcycle
-
-# 7. Ohhhhh #PointBreak is on tomorrow. Love that film and haven't seen it in quite some
-# weeks
-# thing
-# time - answer yes (better if I drop count of 1)
-# years
-
-# 8. After the ice bucket challenge Louis will push his long wet hair out of his eyes with his little
-# toes
-# eyes
-# ears
-# fingers - answer no
-
-# 9. Be grateful for the good times and keep the faith during the
-# sad
-# worse
-# bad - answer no
-# hard
-
-# 10. If this isn't the cutest thing you've ever seen, then you must be
-# callous
-# insensitive
-# asleep
-# insane - answer no
-
-
-```
 
 
 
