@@ -1,0 +1,245 @@
+---
+title: "Model validation and testing"
+author: "Joe Rubash"
+date: "January 8th, 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup}
+# clear environment
+rm(list = ls())
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# required libraries
+library(tidyverse)
+library(readr)
+library(readtext)
+library(purrr)
+library(quanteda)
+library(tm)
+library(data.table)
+library(stringi)
+library(stringr)
+library(knitr)
+library(rbenchmark)
+library(doParallel)
+library(R.utils)
+
+# Functions---------------------------------------------------------------------
+
+# Generic function for parallelizing any task (when possible)
+parallelizeTask <- function(task, ...) {
+  # Calculate the number of cores
+  ncores <- detectCores() - 1
+  # Initiate cluster
+  cl <- makeCluster(ncores)
+  registerDoParallel(cl)
+  #print("Starting task")
+  r <- task(...)
+  #print("Task done")
+  stopCluster(cl)
+  r
+}
+
+# create function to read in convert, sample then write to file text data
+sample_data <- function(file){
+    readLines(con = file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE)
+    }
+
+# Download data-----------------------------------------------------------------
+# download and unzip data folder
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+# Sample data------------------------------------------------------------------
+# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
+sample.size <- 0.25 # delete sample files and rerun code if changing sample size
+
+# create function to read in convert, sample then write to file text data
+sample_data <- function(file){
+    readLines(con = file,
+              skipNul = TRUE,
+              encoding="UTF-8") %>%
+    sample(.,
+           size = sample.size * length(.),
+           replace = FALSE)
+    }
+
+# read in and sample all text data
+sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
+sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
+sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
+
+# Combine all text samples
+sample.text <- c(sample.blogs, sample.news, sample.twitter) 
+
+# split sample.text into train, validation and test
+set.seed(123)
+training <- sample(sample.text, size = 0.90 * length(sample.text))
+temp.test <- sample.text[!(sample.text %in% training)]
+valid <- sample(temp.test, size = 0.5 * length(temp.test))
+test <- temp.test[!(temp.test %in% valid)]
+
+# remove unneeded objects
+rm(sample.blogs, sample.news, sample.twitter, temp.test)
+
+```
+```{r Read in model}
+# read in previously built model from file
+
+```
+```{r prep validation data}
+# Prepare corpus by sentences
+corpus.sentences <- corpus(valid) %>%
+    corpus_reshape(., to = "sentence") 
+
+# Create pentagrams for validation
+pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
+
+# split pentagram into base and prediction
+split_base_pred <- function(ngram){
+    dt <- data.table(text = ngram)
+    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+    dt <- dt[, text := NULL]
+    dt <- setkey(dt, base)
+    }
+    
+valid.pentagram <- split_base_pred(ngram = pentagram)
+rm(pentagram, corpus.sentences)
+
+# further prepare validation data for entry into prediction algorithm
+valid.pentagram.base <- valid.pentagram[["base"]]
+valid.pentagram.pred <- valid.pentagram[["pred"]]
+
+```
+```{r Evaluate model}
+# function to run validation data through model
+predict_next_word <- function(prev.words, model){
+    string <- str_replace_all(prev.words, "_", " ")
+    n = 4:1
+    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+    test.input <- data.table(base = stri_extract(string, regex = patt))
+    test.input <- test.input[, order := length(test.input$base):1]
+    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
+        tolower()] 
+    prep.input <- setkey(prep.input, base)
+    prep.input <- prep.input$base
+    results.dt <- model[base %in% prep.input]
+    result <- results.dt[order(-prob)[1], .(base, pred)]
+    print(result)
+    }
+
+ptm <- proc.time() # start time
+predict_next_word(prev.words = valid.pentagram.base[58912])
+proc.time() - ptm # end time and difference
+
+
+# validation of models #########################################################
+ptm <- proc.time() # start time
+# randomly sample from validation data set
+valid.size <- 1000
+set.seed(123)
+valid.base.sample <- sample(valid.pentagram.base, valid.size, replace = FALSE)
+
+# associated actual prediction for sample of validation data
+set.seed(123)
+valid.pred.sample <- sample(valid.pentagram.pred, valid.size, replace = FALSE)
+
+#num.to.test <- 1:1000
+model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
+    mutate(actual.pred = valid.pred.sample,
+           result = pred == actual.pred)
+model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
+                         no.pred = sum(is.na(result))/length(result))
+(proc.time() - ptm)[3] / valid.size # end time and difference
+
+################################################################################
+
+ptm <- proc.time() # start time
+ng.15.test[base == "given_that"]
+(proc.time() - ptm)[3] / 3# end time and difference
+
+sample(valid.pentagram.base, 10)
+```
+
+
+```{r week 3 quiz}
+# 1. The guy in front of me just bought a pound of bacon, a bouquet, and a case of
+# soda
+# beer - answer good
+# cheese
+# pretzels
+
+# 2. You're the reason why I smile everyday. Can you follow me please? It would mean the
+# universe
+# most
+# best
+# world - answer good
+
+# 3. Hey sunshine, can you follow me and make me the
+# saddest
+# smelliest
+# happiest - answer no
+# bluest
+
+# 4. Very early observations on the Bills game: Offense still struggling but the
+# crowd
+# players
+# referees
+# defense - answer no
+
+# 5. Go on a romantic date at the
+# mall
+# beach - answer no
+# grocery
+# movies
+
+# 6. Well I'm pretty sure my granny has some old bagpipes in her garage I'll dust them off and be on my
+# phone
+# way - answer close (would work if I dropped count under 2)
+# horse
+# motorcycle
+
+# 7. Ohhhhh #PointBreak is on tomorrow. Love that film and haven't seen it in quite some
+# weeks
+# thing
+# time - answer yes (better if I drop count of 1)
+# years
+
+# 8. After the ice bucket challenge Louis will push his long wet hair out of his eyes with his little
+# toes
+# eyes
+# ears
+# fingers - answer no
+
+# 9. Be grateful for the good times and keep the faith during the
+# sad
+# worse
+# bad - answer no
+# hard
+
+# 10. If this isn't the cutest thing you've ever seen, then you must be
+# callous
+# insensitive
+# asleep
+# insane - answer no
+
+```
+
+
