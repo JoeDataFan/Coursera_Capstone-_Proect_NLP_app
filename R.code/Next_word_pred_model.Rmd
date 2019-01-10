@@ -43,6 +43,7 @@ library(purrr)
 library(quanteda)
 library(tm)
 library(data.table)
+library(reshape2)
 library(stringi)
 library(stringr)
 library(knitr)
@@ -80,23 +81,23 @@ parallelizeTask <- function(task, ...) {
 
 # Functions to create ngrams and then calculate frequencies
 # Create ngrams
-create_ngrams <- function(corpus, ngrams){
-    tokens(corpus, what = "word",
-                              remove_numbers = TRUE,
-                              remove_punct = TRUE,
-                              remove_symbols = TRUE,
-                              remove_separators = TRUE,
-                              remove_twitter = TRUE, 
-                              remove_hyphens = TRUE,
-                              remove_url = TRUE,
-                              ngrams = ngrams,
-                              skip = 0L,
-                              concatenator = "_",
-                              verbose = quanteda_options("verbose"),
-                              include_docvars = TRUE) %>% 
-    tokens_tolower(.) %>% 
-    unlist(., use.names = FALSE)
-}
+#create_ngrams <- function(corpus, ngrams){
+#    tokens(corpus, what = "word",
+#                              remove_numbers = TRUE,
+#                              remove_punct = TRUE,
+#                              remove_symbols = TRUE,
+#                              remove_separators = TRUE,
+#                              remove_twitter = TRUE, 
+#                              remove_hyphens = TRUE,
+#                              remove_url = TRUE,
+#                              ngrams = ngrams,
+#                              skip = 0L,
+#                              concatenator = "_",
+#                              verbose = quanteda_options("verbose"),
+#                              include_docvars = TRUE) %>% 
+#    tokens_tolower(.) %>% 
+#    unlist(., use.names = FALSE)
+#}
 
 dfm_ngrams <- function(corpus, ngrams){
     dfm(corpus, what = "word",
@@ -116,40 +117,46 @@ dfm_ngrams <- function(corpus, ngrams){
     }
 
 # need to continue working on this function... this is the final piece to take colSum(dfm) data (basically the count of how often base and pred combinations occur) then split to base and pred, cound the number of unique base_pred for a given base then calc probabilities and perhaps tf-id????
-split_base_pred_freq <- function(dfm.ngram){
-    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
-    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
-    dt <- dt[, c("base", "pred") 
-      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
-    dt <- dt[, feats := NULL]
-    dt <- setkey(dt, base)
-    dt <- dt[, := base.count = sum(count), key = base]
-    dt <- dt[count > 1]
-    dt <- dt[, prob := count / base.count]
-    dt <- dt[ , .SD[which.max(count)], # how could I keep top 2 or 3 counts for each base?
-              key = base]
-    return(dt)
-}
+#split_base_pred_freq <- function(dfm.ngram){
+#    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
+#    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
+#    dt <- dt[, c("base", "pred") 
+#      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
+#    dt <- dt[, feats := NULL]
+#    dt <- setkey(dt, base)
+#    dt <- dt[, := base.count = sum(count), key = base]
+#    dt <- dt[count > 1]
+#    dt <- dt[, prob := count / base.count]
+#    dt <- dt[ , .SD[which.max(prob)], # how could I keep top 2 or 3 counts for each #base?
+#              key = base]
+#    return(dt)
+#}
 
 
 # Model data
 # convert to data.table then split bigram into base and prediction
-split_base_pred_freq <- function(ngram){
-    dt <- data.table(text = ngram)
-    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+split_base_pred_freq <- function(dfm.ngram){
+    #dfm.ngram <- bigrams.test
+    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
+    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
     dt <- dt[, c("base", "pred") 
-      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
-    dt <- dt[, text := NULL]
+      := data.table(stri_split_fixed(feats, " ", simplify = TRUE))]
+    dt <- dt[, feats := NULL]
     dt <- setkey(dt, base)
-    dt <- dt[, ":=" (count = uniqueN(pred),
-               base.count = .N),
+    dt <- dt[, `:=` (base.count = sum(count.dfm.ngram)),
              key = base]
-    dt <- dt[count > 1]
-    dt <- dt[, prob := count / base.count]
-    dt <- dt[ , .SD[which.max(count)],
+    dt <- dt[count.dfm.ngram > 1]
+    dt <- dt[, prob := count.dfm.ngram / base.count]
+    dt <- dt[ , .SD[which.max(count.dfm.ngram)],
               key = base]
+    dt <- dt[, count.dfm.ngram := NULL]
+    dt <- dt[, base.count := NULL]
+    dt <- dt[str_which(base, "[[:ascii:]]+")] # extract only ascii characters
+    dt <- dt[-(str_which(base, "[:digit:]"))] # remove words with numbers
     return(dt)
 }
+
+
 
 
 # Download data-----------------------------------------------------------------
@@ -162,6 +169,7 @@ if(!dir.exists("../data/Coursera-SwiftKey/")){
     rm(temp)
 }
 
+ptm <- proc.time() # start time
 # Sample and slpit into train, validate and test data------------------------------------------------------------------
 
 # read in all text data
@@ -181,7 +189,7 @@ all.text <- c(blogs, news, twitter)
 # remove unneeded objects
 rm(blogs, news, twitter)
 
-sample.size <- 0.50 # delete sample files and rerun code if changing sample size
+sample.size <- 0.25 # delete sample files and rerun code if changing sample size
 valid.size <- 0.05
 test.size <- 0.05
 
@@ -202,66 +210,68 @@ rm(all.text)
 
 # Clean data--------------------------------------------------------------------
 # remove extra spaces between words
-training <- training %>% 
-    str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
+#training <- training %>% 
+#    str_replace_all(.e, "\\s+", " ") %>% # remove extra spaces between words
 
 # the following code seems to work well to create unigram and bigram tokens from 
 # combined text. The tokens can then be converted from lists to a single character
 # vector.
 
+
 # Prepare corpus by sentences---------------------------------------------------
-corpus.sentences <- corpus(test) %>%
+corpus.sentences <- corpus(training) %>%
     corpus_reshape(., to = "sentence") 
 
 # Create ngram frequencies data table-------------------------------------------
 
-bigrams.test <- dfm_ngrams(corpus = corpus.sentences, ngrams = 2)
-dt.bigram.test <- data.table(base = names(bigrams.test),
-                             count = colSums(bigrams.test),
-                             row.names = NULL,
-                             stringsAsFactors = FALSE)
-
 # unigrams
-unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
-unigram.dt <- data.table(text = unigram)
-unigram.dt <- unigram.dt[, count := .N, by = text]
-unigram.dt <- unigram.dt[, prob := count / length(unigram.dt$count)]
-unigram.dt <- unigram.dt[order(count, decreasing = TRUE)]
-unigram.dt <- unique(unigram.dt)
+#unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
+#unigram.dt <- data.table(text = unigram)
+#unigram.dt <- unigram.dt[, count := .N, by = text]
+#unigram.dt <- unigram.dt[, prob := count / length(unigram.dt$count)]
+#unigram.dt <- unigram.dt[order(count, decreasing = TRUE)]
+#unigram.dt <- unique(unigram.dt)
 
 # bigrams
 # start by initiating all cores for parallel processing
-bigram <- create_ngrams(corpus = corpus.sentences, ngrams = 2L)
-bigram.freq <- split_base_pred_freq(ngram = bigram)
-rm(bigram)
+bigram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 2) %>%
+    split_base_pred_freq(.)
 
 # trigrams
-trigram <- create_ngrams(corpus = corpus.sentences, ngrams = 3L)
-trigram.freq <- split_base_pred_freq(ngram = trigram)
-rm(trigram)
+trigram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 3) %>%
+    split_base_pred_freq(.)
 
 # quadgrams
-quadgram <- create_ngrams(corpus = corpus.sentences, ngrams = 4L)
-quadgram.freq <- split_base_pred_freq(ngram = quadgram)
-rm(quadgram)
+quadgram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 4) %>%
+    split_base_pred_freq(.)
 
 # pentagrams
-pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
-pentagram.freq <- split_base_pred_freq(ngram = pentagram)
-rm(pentagram, corpus.sentences)
+pentagram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 5) %>%
+    split_base_pred_freq(.)
+
+# hexagrams
+hexagram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 6) %>%
+    split_base_pred_freq(.)
+rm(corpus.sentences)
 
 # combine ngrams
-ngram.list <- list(bigram.freq, trigram.freq, quadgram.freq, pentagram.freq)
+ngram.list <- list(bigram, trigram, quadgram, pentagram, hexagram)
 ngrams.freq <- rbindlist(ngram.list)
-rm(ngram.list, bigram.freq, trigram.freq, quadgram.freq, pentagram.freq)
-ngrams.freq <- setkey(ngrams.freq, base)
+rm(ngram.list, bigram, trigram, quadgram, pentagram, hexagram)
+ngrams.1to6.freq <- setkey(ngrams.freq, base)
 
 # Save an object to file under the "next_word_prediction" app
-saveRDS(ngrams.freq.15, file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+saveRDS(ngrams.1to6.freq, file = "./Next_word_prediction/model.data/ngrams.mod.3.rds")
+
+proc.time() - ptm # end time and difference
 # Restore the object
 #ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
 
 ```
+Time to run above model 1-9-2019 11 pm
+  user  system elapsed 
+2290.42  195.03 2512.83 
+
 
 # Thoughts and todo:
 - learn how to use multiple cores (parallel processing)
