@@ -1,0 +1,255 @@
+---
+title: "Next_word_pred_model"
+author: "Joe Rubash"
+date: "December 12, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+# Model description:
+I am having a hard time building this model with current RAM. Even after separating ngram creation I am still running into RAM limit at quadgrams. 25% sample of text seems to be the limit for me at the moment.
+
+This model is similar to model 4 but uses a training data set that is 50% of all text data. RAM is reduced by saving each aggrigated ngram to file to combined later. Probability for each base-pred pair is modified slightly based on the length of ngrams. This is based off the "stupid back off model". I will multiply each probability by 0.4 raised to the absolute value of 5 - number of words in the base. This equation is assuming a max base of 5 words which would see no adjustment.
+
+```{r setup}
+# clear environment
+rm(list = ls())
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# required libraries
+library(tidyverse)
+library(readr)
+library(readtext)
+library(purrr)
+library(quanteda)
+library(tm)
+library(data.table)
+library(reshape2)
+library(stringi)
+library(stringr)
+library(knitr)
+library(rbenchmark)
+library(doParallel)
+library(R.utils)
+
+quanteda_options(threads = 3)
+
+# Functions---------------------------------------------------------------------
+  
+# function to create dfm from ngrams of specied length
+dfm_ngrams <- function(corpus, ngrams){
+    dfm(corpus, what = "word",
+        tolower = TRUE,
+        remove_numbers = TRUE,
+        remove_punct = TRUE,
+        remove_symbols = TRUE,
+        remove_separators = TRUE,
+        remove_twitter = TRUE, 
+        remove_hyphens = TRUE,
+        remove_url = TRUE,
+        ngrams = ngrams,
+        skip = 0L,
+        concatenator = "_",
+        verbose = quanteda_options("verbose")) %>% 
+        colSums(.)
+    }
+
+# Model data
+# convert to data.table then split bigram into base and prediction and calc probabilities
+split_base_pred_freq <- function(dfm.ngram){
+    #dfm.ngram <- bigrams.test
+    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
+    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
+    dt <- dt[, c("base", "pred") 
+      := data.table(stri_split_fixed(feats, " ", simplify = TRUE))]
+    dt <- dt[, feats := NULL]
+    dt <- setkey(dt, base)
+    dt <- dt[, `:=` (base.count = sum(count.dfm.ngram),
+                     ngram = length(str_split(base, "_")[[1]])),
+             key = base]
+    dt <- dt[count.dfm.ngram > 1]
+    dt <- dt[, `:=` (prob = (count.dfm.ngram / base.count) * (0.4^abs(5-ngram)))]
+    dt <- dt[ , .SD[which.max(count.dfm.ngram)],
+              key = base]
+    dt <- dt[, count.dfm.ngram := NULL]
+    dt <- dt[, base.count := NULL]
+    dt <- dt[str_which(base, "[[:ascii:]]+")] # extract only ascii characters
+    dt <- dt[-(str_which(base, "[:digit:]"))] # remove words with numbers
+    return(dt)
+}
+
+```
+```{r load and sample data}
+# download and unzip data folder if needed
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+ptm <- proc.time() # start time
+# Sample and slpit into train, validate and test data
+
+# read in all text data
+blogs <- readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                   skipNul = TRUE,
+                   encoding="UTF-8")
+news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+                  skipNul = TRUE,
+                  encoding="UTF-8")
+twitter <-  readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                      skipNul = TRUE,
+                      encoding="UTF-8")
+
+# Combine all text data
+all.text <- c(blogs, news, twitter) 
+
+# remove unneeded objects
+rm(blogs, news, twitter)
+
+sample.size <- 0.50 # delete sample files and rerun code if changing sample size
+valid.size <- 0.05
+test.size <- 0.05
+
+# split all.text into training, validation and test
+set.seed(123)
+valid <- sample(all.text,
+                   size = valid.size * length(all.text),
+                   replace = FALSE)
+test <- sample(all.text[-which(valid %in% all.text)],
+                   size = test.size * length(all.text),
+                   replace = FALSE) 
+training <- sample(all.text[-which(c(valid, test) %in% all.text)],
+                   size = sample.size * length(all.text),
+                   replace = FALSE) 
+
+# remove unneeded objects
+rm(all.text)
+```
+```{r corpus and bigram}
+# Prepare corpus by sentences---------------------------------------------------
+corpus.sentences <- corpus(training) %>%
+    corpus_reshape(., to = "sentence") 
+# save to file to be used later
+saveRDS(corpus.sentences, file = "./data/temp.data/corpus.sentences.rds")
+rm(training)
+
+# Create ngram frequencies data table-------------------------------------------
+
+# unigrams
+#unigram <- create_ngrams(corpus = corpus.sentences, ngrams = 1L)
+#unigram.dt <- data.table(text = unigram)
+#unigram.dt <- unigram.dt[, count := .N, by = text]
+#unigram.dt <- unigram.dt[, prob := count / length(unigram.dt$count)]
+#unigram.dt <- unigram.dt[order(count, decreasing = TRUE)]
+#unigram.dt <- unique(unigram.dt)
+
+# bigrams
+# start by initiating all cores for parallel processing
+bigram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 2) %>%
+    split_base_pred_freq(.)
+# save to file to be combined later
+saveRDS(bigram, file = "./data/temp.data/bigram.rds")
+rm(bigram)
+```
+```{r trigram}
+# restart the R session to clear RAM
+.rs.restartR() 
+# run library and functions script "setup"
+
+#load corpus.sentences
+corpus.sentences <- readRDS(file = "./data/temp.data/corpus.sentences.rds")
+
+# trigrams
+trigram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 3) %>%
+    split_base_pred_freq(.)
+# save to file to be combined later
+saveRDS(trigram, file = "./data/temp.data/trigram.rds")
+rm(trigram)
+```
+```{r quadgram}
+# restart the R session to clear RAM
+.rs.restartR() 
+# run library and functions script "setup"
+
+#load corpus.sentences
+corpus.sentences <- readRDS(file = "./data/temp.data/corpus.sentences.rds")
+
+# quadgrams
+quadgram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 4) %>%
+    split_base_pred_freq(.)
+# save to file to be combined later
+saveRDS(quadgram, file = "./data/temp.data/quadgram.rds")
+rm(quadgram)
+```
+```{r pentagram}
+# restart the R session to clear RAM
+.rs.restartR() 
+# run library and functions script "setup"
+
+#load corpus.sentences
+corpus.sentences <- readRDS(file = "./data/temp.data/corpus.sentences.rds")
+
+# pentagrams
+pentagram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 5) %>%
+    split_base_pred_freq(.)
+# save to file to be combined later
+saveRDS(pentagram, file = "./data/temp.data/pentagram.rds")
+rm(pentagram)
+```
+```{r hexagram and combine}
+# restart the R session to clear RAM
+.rs.restartR() 
+# run library and functions script "setup"
+
+#load corpus.sentences
+corpus.sentences <- readRDS(file = "./data/temp.data/corpus.sentences.rds")
+
+# hexagrams
+hexagram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 6) %>%
+    split_base_pred_freq(.)
+rm(corpus.sentences)
+
+# load ngrams
+bigram <- readRDS(file = "./data/temp.data/bigram.rds")
+trigram <- readRDS(file = "./data/temp.data/trigram.rds")
+quadgram <- readRDS(file = "./data/temp.data/quadgram.rds")
+pentagram <- readRDS(file = "./data/temp.data/pentagram.rds")
+
+# combine ngrams
+ngram.list <- list(bigram, trigram, quadgram, pentagram, hexagram)
+ngrams.freq <- rbindlist(ngram.list)
+rm(ngram.list, bigram, trigram, quadgram, pentagram, hexagram)
+ngrams.freq <- setkey(ngrams.freq, base)
+
+# Save an object to file under the "next_word_prediction" app
+saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.mod.5.rds")
+
+proc.time() - ptm # end time and difference
+# Restore the object
+#ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+
+```
+Time to run above model 1-9-2019 11 pm
+  user  system elapsed 
+2290.42  195.03 2512.83 
+
+
+# Thoughts and todo:
+- learn how to use multiple cores (parallel processing)
+- learn how to index / create dictionary to speedup processing
+need to remove bad words... perhaps I can group by sentences then remove sentences with bad words
+- create unigram, bigram, trigram, tetragram, pentagram
+- split into base and predict words
+- determine frequencies for each base / predict word pair
+- combine all data and save to file
+- create program to run predictions using backoff method. start at 5 grams then end with most common unigram work if no solution is found
+
+
+
