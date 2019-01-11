@@ -29,21 +29,7 @@ library(rbenchmark)
 library(doParallel)
 library(R.utils)
 
-# Functions---------------------------------------------------------------------
-
-# Generic function for parallelizing any task (when possible)
-parallelizeTask <- function(task, ...) {
-  # Calculate the number of cores
-  ncores <- detectCores() - 1
-  # Initiate cluster
-  cl <- makeCluster(ncores)
-  registerDoParallel(cl)
-  #print("Starting task")
-  r <- task(...)
-  #print("Task done")
-  stopCluster(cl)
-  r
-}
+# Functions ####################################################################
 
 # create function to read in convert, sample then write to file text data
 sample_data <- function(file){
@@ -55,82 +41,49 @@ sample_data <- function(file){
            replace = FALSE)
     }
 
-# Download data-----------------------------------------------------------------
-# download and unzip data folder
-if(!dir.exists("../data/Coursera-SwiftKey/")){
-    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
-    temp <- tempfile()
-    download.file(file.url, temp, mode = "wb")
-    unzip(temp, exdir = "../data/Coursera-SwiftKey")
-    rm(temp)
+# function to create dfm matrices of different ngrams
+dfm_ngrams <- function(corpus, ngrams){
+    dfm(corpus, what = "word",
+        tolower = TRUE,
+        remove_numbers = TRUE,
+        remove_punct = TRUE,
+        remove_symbols = TRUE,
+        remove_separators = TRUE,
+        remove_twitter = TRUE, 
+        remove_hyphens = TRUE,
+        remove_url = TRUE,
+        ngrams = ngrams,
+        skip = 0L,
+        concatenator = "_",
+        verbose = quanteda_options("verbose")) %>% 
+        colSums(.)
 }
 
-# Sample data------------------------------------------------------------------
-# define sample size, read in all english data files, sample, combine, add lines and save to file as csv
-sample.size <- 0.25 # delete sample files and rerun code if changing sample size
-
-# create function to read in convert, sample then write to file text data
-sample_data <- function(file){
-    readLines(con = file,
-              skipNul = TRUE,
-              encoding="UTF-8") %>%
-    sample(.,
-           size = sample.size * length(.),
-           replace = FALSE)
-    }
-
-# read in and sample all text data
-sample.blogs <- sample_data(file = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt")
-sample.news <- sample_data(file = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"))
-sample.twitter <- sample_data(file =  "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt")
-
-# Combine all text samples
-sample.text <- c(sample.blogs, sample.news, sample.twitter) 
-
-# split sample.text into train, validation and test
-set.seed(123)
-training <- sample(sample.text, size = 0.90 * length(sample.text))
-temp.test <- sample.text[!(sample.text %in% training)]
-valid <- sample(temp.test, size = 0.5 * length(temp.test))
-test <- temp.test[!(temp.test %in% valid)]
-
-# remove unneeded objects
-rm(sample.blogs, sample.news, sample.twitter, temp.test)
-
-```
-```{r Read in model}
-# read in previously built model from file
-
-```
-```{r prep validation data}
-# Prepare corpus by sentences
-corpus.sentences <- corpus(valid) %>%
-    corpus_reshape(., to = "sentence") 
-
-# Create pentagrams for validation
-pentagram <- create_ngrams(corpus = corpus.sentences, ngrams = 5L)
-
-# split pentagram into base and prediction
-split_base_pred <- function(ngram){
-    dt <- data.table(text = ngram)
-    dt <- dt[, text := stri_replace_last_fixed(text,"_", " ")]
+# function to take dfm convert to data.table then split into base and pred and 
+# calculate probabilities
+split_base_pred_freq <- function(dfm.ngram){
+    #dfm.ngram <- bigrams.test
+    dt <- data.table(feats = names(dfm.ngram), count = as.data.table(dfm.ngram))
+    dt <- dt[, feats := stri_replace_last_fixed(feats,"_", " ")]
     dt <- dt[, c("base", "pred") 
-      := data.table(stri_split_fixed(text, " ", simplify = TRUE))]
-    dt <- dt[, text := NULL]
+      := data.table(stri_split_fixed(feats, " ", simplify = TRUE))]
+    dt <- dt[, feats := NULL]
     dt <- setkey(dt, base)
-    }
-    
-valid.pentagram <- split_base_pred(ngram = pentagram)
-rm(pentagram, corpus.sentences)
+    dt <- dt[, `:=` (base.count = sum(count.dfm.ngram)),
+             key = base]
+    dt <- dt[count.dfm.ngram > 1]
+    dt <- dt[, prob := count.dfm.ngram / base.count]
+    dt <- dt[ , .SD[which.max(count.dfm.ngram)],
+              key = base]
+    dt <- dt[, count.dfm.ngram := NULL]
+    dt <- dt[, base.count := NULL]
+    dt <- dt[str_which(base, "[[:ascii:]]+")] # extract only ascii characters
+    dt <- dt[-(str_which(base, "[:digit:]"))] # remove words with numbers
+    return(dt)
+}
 
-# further prepare validation data for entry into prediction algorithm
-valid.pentagram.base <- valid.pentagram[["base"]]
-valid.pentagram.pred <- valid.pentagram[["pred"]]
-
-```
-```{r Evaluate model}
 # function to run validation data through model
-predict_next_word <- function(prev.words, model){
+predict_next_word <- function(prev.words, model = ng.model){
     string <- str_replace_all(prev.words, "_", " ")
     n = 4:1
     patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
@@ -145,23 +98,99 @@ predict_next_word <- function(prev.words, model){
     print(result)
     }
 
+
+# Sample data ##################################################################
+# download and unzip data folder if needed
+if(!dir.exists("../data/Coursera-SwiftKey/")){
+    file.url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+    temp <- tempfile()
+    download.file(file.url, temp, mode = "wb")
+    unzip(temp, exdir = "../data/Coursera-SwiftKey")
+    rm(temp)
+}
+
+# read in all text data
+blogs <- readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.blogs.txt",
+                   skipNul = TRUE,
+                   encoding="UTF-8")
+news <- readLines(con = file("../data/Coursera-SwiftKey/final/en_US/en_US.news.txt", "rb"),
+                  skipNul = TRUE,
+                  encoding="UTF-8")
+twitter <-  readLines(con = "../data/Coursera-SwiftKey/final/en_US/en_US.twitter.txt",
+                      skipNul = TRUE,
+                      encoding="UTF-8")
+
+# Combine all text data
+all.text <- c(blogs, news, twitter) 
+
+# remove unneeded objects
+rm(blogs, news, twitter)
+
+valid.size <- 0.05
+test.size <- 0.05
+
+# grab randomly selected validation and test data from all.text
+set.seed(123)
+valid <- sample(all.text,
+                   size = valid.size * length(all.text),
+                   replace = FALSE)
+test <- sample(all.text[-which(valid %in% all.text)],
+                   size = test.size * length(all.text),
+                   replace = FALSE) 
+
+# remove unneeded objects
+rm(all.text)
+
+```
+```{r Read in model}
+# read in previously built model from file
+#ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.3.rds")
+
+#ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.freq.15.rds")
+
+#ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.freq.25.rds")
+
+#ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.3.rds")
+
+ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.4.rds")
+#getwd()
+
+```
+```{r prep validation data}
+# Prepare corpus by sentences
+corpus.sentences <- corpus(valid) %>%
+    corpus_reshape(., to = "sentence") 
+
+# Create hexagrams for validation
+hexagram <- dfm_ngrams(corpus = corpus.sentences, ngrams = 6L)
+
+# split hexagram into base and prediction
+valid.hexagram <- split_base_pred_freq(dfm.ngram = hexagram)
+rm(hexagram, corpus.sentences)
+
+# further prepare validation data for entry into prediction algorithm
+valid.hexagram.base <- valid.hexagram[["base"]]
+valid.hexagram.pred <- valid.hexagram[["pred"]]
+
+```
+```{r Evaluate model}
 ptm <- proc.time() # start time
-predict_next_word(prev.words = valid.pentagram.base[58912])
+predict_next_word(prev.words = valid.hexagram.base[58])
 proc.time() - ptm # end time and difference
 
 
-# validation of models #########################################################
-ptm <- proc.time() # start time
+# validation of models 
+
 # randomly sample from validation data set
-valid.size <- 1000
-set.seed(123)
-valid.base.sample <- sample(valid.pentagram.base, valid.size, replace = FALSE)
+valid.size <- 500
+set.seed(345)
+valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
 
 # associated actual prediction for sample of validation data
-set.seed(123)
-valid.pred.sample <- sample(valid.pentagram.pred, valid.size, replace = FALSE)
+set.seed(345)
+valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
 
-#num.to.test <- 1:1000
+ptm <- proc.time() # start time
 model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
     mutate(actual.pred = valid.pred.sample,
            result = pred == actual.pred)
@@ -169,15 +198,46 @@ model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(
                          no.pred = sum(is.na(result))/length(result))
 (proc.time() - ptm)[3] / valid.size # end time and difference
 
-################################################################################
-
-ptm <- proc.time() # start time
-ng.15.test[base == "given_that"]
-(proc.time() - ptm)[3] / 3# end time and difference
-
-sample(valid.pentagram.base, 10)
 ```
+1/10/2019 1:00 pm
+ngrams.model.3.rds
+10,000 hexagram tests from validation data
+ correct.pred.rate no.pred
+1            0.5923   0.003
+ elapsed 
+0.005929 sec per test
 
+1/10/2019 2:06 pm
+ngrams.model.3.rds
+500 hexagram tests from validation data
+ correct.pred.rate no.pred
+1             0.618   0.004
+elapsed 
+0.00528 sec per test
+
+1/10/2019 2:03 pm
+ngrams.freq.15.rds
+500 hexagram tests from validation data
+correct.pred.rate no.pred
+1             0.328       0
+elapsed 
+ 3.6179 sec per test
+ 
+1/10/2019 2:17 pm
+ngrams.freq.25.rds
+500 hexagram tests from validation data
+ correct.pred.rate no.pred
+1             0.216   0.002
+elapsed 
+0.84734 sec per test
+
+1/10/2019 4:43 pm
+ngrams.model.4.rds
+500 hexagram tests from validation data
+correct.pred.rate no.pred
+1             0.614   0.004
+elapsed 
+0.00578  sec per test
 
 ```{r week 3 quiz}
 # 1. The guy in front of me just bought a pound of bacon, a bouquet, and a case of
