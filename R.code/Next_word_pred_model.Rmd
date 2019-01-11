@@ -221,6 +221,7 @@ rm(all.text)
 # Prepare corpus by sentences---------------------------------------------------
 corpus.sentences <- corpus(training) %>%
     corpus_reshape(., to = "sentence") 
+rm(training)
 
 # Create ngram frequencies data table-------------------------------------------
 
@@ -258,7 +259,7 @@ rm(corpus.sentences)
 ngram.list <- list(bigram, trigram, quadgram, pentagram, hexagram)
 ngrams.freq <- rbindlist(ngram.list)
 rm(ngram.list, bigram, trigram, quadgram, pentagram, hexagram)
-ngrams.1to6.freq <- setkey(ngrams.freq, base)
+ngrams.freq <- setkey(ngrams.freq, base)
 
 # Save an object to file under the "next_word_prediction" app
 saveRDS(ngrams.1to6.freq, file = "./Next_word_prediction/model.data/ngrams.mod.3.rds")
