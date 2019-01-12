@@ -10,6 +10,25 @@
 
 library(shiny)
 
+#functions for later use:
+saveData <- function(data) {
+    #data <- as.data.frame((data))
+    if (exists("textString")) {
+        textString <<- rbind(textString, data)
+    }else{
+        textString <<- data
+        }
+}
+
+loadData <- function() {
+    if (exists("textString")) {
+        textString <- unique(textString)
+        textString <- as.character(textString[[1]])
+        textString <- paste(textString, collapse = " ")
+        textString
+    }
+}
+
     server <- function(input, output, session) {
         observe({
             # We'll use the input$controller variable multiple times, so save it as x
@@ -32,6 +51,7 @@ library(shiny)
                 prep.input <- prep.input$base
                 results.dt <- model[base %in% prep.input]
                 result <- results.dt[order(-prob)[1], pred][1]
+                result <- if_else(is.na(result), " ", result)
                 print(result)
             }
             
@@ -42,10 +62,51 @@ library(shiny)
                             "inText",
                             value = paste(prediction))
             
-            ## Can also set the label, this time for input$inText2
-            #updateTextInput(session, "inText2",
-            #                label = paste("Predicted next word", x),
-            #                value = paste("New text", x))
+            # save previous words and prediction when button is clicked
+            textData <- reactive({
+                data <- paste(input$previous.words, input$inText)
+                data <- data.table(returned.text = c(data))
+                })
+            
+            # When the "Yes, that's it!" button is clicked, save the data
+            observeEvent(input$yes, {
+                saveData(textData())
+            }, ignoreNULL = TRUE, ignoreInit = TRUE, once = TRUE)
+            
+            # Show the previous responses
+            # (update with current response when Submit is clicked)
+            observeEvent(input$yes, {
+                output$textString <- renderText({
+                loadData()
+                    })
+                }, ignoreNULL = TRUE, ignoreInit = TRUE, once = TRUE)     
+            
+            observeEvent(input$yes, {
+                updateTextInput(session, "previous.words", value = "")
+                updateTextInput(session, "inText", value = "")
+                }, ignoreNULL = TRUE, ignoreInit = TRUE, once = TRUE)
         })
     }
     
+    
+    
+    
+    
+    
+#    # Whenever a field is filled, aggregate all form data
+#    formData <- reactive({
+#        data <- sapply(fields, function(x) input[[x]])
+#        data
+#    })
+#    
+#    # When the Submit button is clicked, save the form data
+#    observeEvent(input$submit, {
+#        saveData(formData())
+#    })
+#    
+#    # Show the previous responses
+#    # (update with current response when Submit is clicked)
+#    output$responses <- DT::renderDataTable({
+#        input$submit
+#        loadData()
+#    })     

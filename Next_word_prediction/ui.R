@@ -12,7 +12,11 @@ library(shiny)
 ui <- fluidPage(
     h4('Next Word Prediction Algorithm'),
     p('Type in the box below and the next word will be predicted'),
-    textInput("previous.words", "Previous words"),
-    textInput("inText", "Predicted next word")
-)
+    textInput("previous.words", "Previous words:"),
+    textInput("inText", "Predicted next word:"),
+    actionButton("yes", "Yes, that's it!"),
+    br(),
+    br(),
+    textOutput("textString")
+    )
 #getwd()
