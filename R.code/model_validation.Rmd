@@ -83,7 +83,7 @@ split_base_pred_freq <- function(dfm.ngram){
 }
 
 # function to run validation data through model
-predict_next_word <- function(prev.words, model = ng.model){
+predict_next_word <- function(prev.words, model = ng.model.clean){
     string <- str_replace_all(prev.words, "_", " ")
     n = 4:1
     patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
@@ -182,7 +182,7 @@ proc.time() - ptm # end time and difference
 # validation of models 
 
 # randomly sample from validation data set
-valid.size <- 500
+valid.size <- 2000
 set.seed(345)
 valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
 
@@ -238,6 +238,13 @@ correct.pred.rate no.pred
 1             0.614   0.004
 elapsed 
 0.00578  sec per test
+
+1/11/2019 8:49 pm
+ngrams.model.4.rds after removing rows with profanity in prediction words
+correct.pred.rate no.pred
+1            0.5965  0.0045
+elapsed 
+0.005765 sec per test
 
 ```{r week 3 quiz}
 # 1. The guy in front of me just bought a pound of bacon, a bouquet, and a case of
