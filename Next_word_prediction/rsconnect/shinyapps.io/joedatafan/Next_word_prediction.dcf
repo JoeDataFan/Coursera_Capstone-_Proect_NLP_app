@@ -1,0 +1,13 @@
+name: Next_word_prediction
+title: Next_word_prediction
+username:
+account: joedatafan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 637327
+bundleId: 1808970
+url: https://joedatafan.shinyapps.io/Next_word_prediction/
+when: 1547216674.68795
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: model.data/ngrams.freq.15.rds|model.data/ngrams.freq.25.rds|model.data/ngrams.mod.3.rds
