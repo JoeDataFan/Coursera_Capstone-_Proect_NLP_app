@@ -32,6 +32,7 @@ library(knitr)
 library(rbenchmark)
 library(doParallel)
 library(R.utils)
+library(sentimentr)
 
 quanteda_options(threads = 3)
 
@@ -171,12 +172,15 @@ ngrams.freq <- rbindlist(ngram.list)
 rm(ngram.list, bigram, trigram, quadgram, pentagram, hexagram)
 ngrams.freq <- setkey(ngrams.freq, base)
 
+# remove all rows that contain profanity words in pred
+ng.model.freq <- ng.model.freq[-profanity(ng.model.freq[,pred])[profanity > 0, element_id],]
+
 # Save an object to file under the "next_word_prediction" app
 saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.mod.4.rds")
 
 proc.time() - ptm # end time and difference
 # Restore the object
-#ng.15.test <- readRDS(file = "./Next_word_prediction/model.data/ngrams.freq.15.rds")
+#ng.model <- readRDS(file = "./Next_word_prediction/model.data/ngrams.mod.4.rds")
 
 ```
 Time to run above model 1-9-2019 11 pm
