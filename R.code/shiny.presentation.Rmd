@@ -1,0 +1,230 @@
+---
+title: "Untitled"
+author: "Joe Rubash"
+date: "January 12, 2019"
+output: 
+  ioslides_presentation: 
+    smaller: no
+    widescreen: no
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# load required libraries
+library(shiny)
+library(data.table)
+library(stringi)
+library(tidyverse)
+library(purrr)
+
+# load model
+ng.model <- readRDS(file = "../Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
+
+# load validation data
+valid.hexagram.base <- loadRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.base.rds")
+valid.hexagram.pred <- loadRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.pred.rds")
+
+# function to run validation data through model
+predict_next_word <- function(prev.words, model = ng.model){
+    string <- str_replace_all(prev.words, "_", " ")
+    n = 4:1
+    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+    test.input <- data.table(base = stri_extract(string, regex = patt))
+    test.input <- test.input[, order := length(test.input$base):1]
+    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
+        tolower()] 
+    prep.input <- setkey(prep.input, base)
+    prep.input <- prep.input$base
+    results.dt <- model[base %in% prep.input]
+    result <- results.dt[order(-prob)[1], .(base, pred)]
+    print(result)
+    }
+```
+
+## Modivation for the app
+why is this important?
+ 
+## Cleaning Data
+all the issues
+why cleaning helps?
+
+## Building The Model
+```{r validation}
+# randomly sample from validation data set
+valid.size <- 2000
+set.seed(345)
+valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
+
+# associated actual prediction for sample of validation data
+set.seed(345)
+valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
+
+ptm <- proc.time() # start time
+model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
+    mutate(actual.pred = valid.pred.sample,
+           result = pred == actual.pred)
+model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
+                         no.pred = sum(is.na(result))/length(result))
+(proc.time() - ptm)[3] / valid.size # end time and difference
+```
+
+show piece of final probilities table
+show how accurate the model is
+show how fast
+size of table
+
+## Building The Application
+how it works
+why its cool
+
+## Next Word Prediction App
+
+```{r next word app, message=FALSE, warning=FALSE, ehco=FALSE}
+# load required libraries
+library(shiny)
+library(data.table)
+library(stringi)
+library(tidyverse)
+
+# load model
+ng.model <- readRDS(file = "../Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
+
+shinyApp(
+    ui = fluidPage(
+        # instructions
+        h4('Type in the box below and the next word will be predicted'),
+        
+        # script to allow "enter" key to be used instead of pressing button
+        tags$script(' $(document).on("keydown", function (e) {
+                                     Shiny.onInputChange("lastkeypresscode", e.keyCode);
+                                     });
+                                     '),
+        
+        # text input box for previous words
+        textInput("previous.words", "Previous words:"),
+        #div(style="display: inline-block;vertical-align:top; width: 250px;",textInput("previous.words", "Previous words:")),
+        # text output giving predicted next word based on previous
+        textInput("inText", "Predicted next word:"),
+        #div(style="display: inline-block;vertical-align:top; width: 100px;",textInput("inText", "Next word:")),          
+        textAreaInput("combination", "Combination:", width = '300px', height = '100px'),
+        br(),
+        actionButton("clear.text", "Start over"),
+        br(),
+        textOutput("textString")
+    ),
+
+    server = function(input, output, session) {
+            # code below observes text in previous word input box then automatically runs
+            # through prediction model to give output
+            
+            #functions for later use:-------------------------------------------------------
+            # save predicted text data and combine with past data
+            saveData <- function(data) {
+                #data <- as.data.frame((data))
+                if (exists("textString")) {
+                    textString <<- rbind(textString, data)
+                }else{
+                    textString <<- data
+                }
+            }
+            
+            # load updated text data
+            loadData <- function() {
+                if (exists("textString")) {
+                    textString <- unique(textString)
+                    textString <- as.character(textString[[1]])
+                    textString <- paste(textString, collapse = " ")
+                    textString
+                }
+            }
+            
+            # Predict next word --------------------------------------------------------
+            # Run previous words through model to give predicted next word
+            observe({
+                # previous words input
+                x <- input$previous.words
+                # function to run previous word string through model
+                predict_next_word <- function(prev.words, model = ng.model){
+                    prev.words <- trimws(prev.words)
+                    n = 5:1
+                    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+                    test.input <- data.table(base = stri_extract(prev.words, regex = patt))
+                    test.input <- test.input[, order := length(test.input$base):1]
+                    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
+                                                 tolower()] 
+                    prep.input <- setkey(prep.input, base)
+                    prep.input <- prep.input$base
+                    results.dt <- model[base %in% prep.input]
+                    result <- results.dt[order(-prob)[1], pred][1]
+                    result <- if_else(is.na(result), " ", result)
+                    print(result)
+                }
+                
+                prediction <- predict_next_word(prev.words = x)
+                # This will change the value of input$inText, based on x
+                
+                predict_next_word(prev.words = "how will you")
+                
+                updateTextInput(session,
+                                "inText",
+                                value = paste(prediction))
+                
+                # Combine previous and predicted 
+                # function to save previous words and prediction
+                textData <- reactive({
+                    data <- paste(trimws(input$previous.words), input$inText)
+                    data <- data.table(returned.text = c(data))
+                })
+                
+                # When the "Yes, that's it!" button is clicked, save the data
+                observe({
+                    if(!is.null(input$lastkeypresscode)){
+                        if(input$lastkeypresscode == 13){
+                            saveData(textData())
+                        }
+                    }
+                })
+                
+                # Store and display output ---------------------------------------------
+                
+                # When the button is clicked show the previous responses combined with
+                # current response in the textbox
+                observe({
+                    if(!is.null(input$lastkeypresscode)){
+                        if(input$lastkeypresscode == 13){
+                            updateTextAreaInput(session,
+                                            "combination",
+                                            value = loadData()
+                            )
+                        }
+                    }
+                })
+                
+                # clear text boxes to allow another prediction to be made
+                observe({
+                    if(!is.null(input$lastkeypresscode)){
+                        if(input$lastkeypresscode == 13){
+                            updateTextInput(session, "previous.words", value = "")
+                            updateTextInput(session, "inText", value = "")}
+                    }
+                })
+                
+                # clear stored text data------------------------------------------------
+                # Button to clear stored text data and start over
+                observeEvent(input$clear.text, {
+                    textString <<- NULL
+                    updateTextAreaInput(session,
+                                    "combination",
+                                    value = loadData()
+                    )
+                },ignoreNULL = TRUE, ignoreInit = TRUE, once = TRUE)
+            })
+    }
+)
+
+```
+
+
+
