@@ -173,10 +173,10 @@ rm(ngram.list, bigram, trigram, quadgram, pentagram, hexagram)
 ngrams.freq <- setkey(ngrams.freq, base)
 
 # remove all rows that contain profanity words in pred
-ng.model.freq <- ng.model.freq[-profanity(ng.model.freq[,pred])[profanity > 0, element_id],]
+ngrams.freq <- ngrams.freq[-profanity(ngrams.freq[,pred])[profanity > 0, element_id],]
 
 # Save an object to file under the "next_word_prediction" app
-saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.mod.4.rds")
+saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
 
 proc.time() - ptm # end time and difference
 # Restore the object
@@ -186,6 +186,11 @@ proc.time() - ptm # end time and difference
 Time to run above model 1-9-2019 11 pm
   user  system elapsed 
 2290.42  195.03 2512.83 
+
+Time to run above model 1-11-2019 11:30 pm
+with profanity cleaning added
+  user  system elapsed 
+3612.25  233.67 4031.19 
 
 
 # Thoughts and todo:
