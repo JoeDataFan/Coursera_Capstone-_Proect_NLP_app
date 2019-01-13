@@ -172,6 +172,9 @@ rm(hexagram, corpus.sentences)
 valid.hexagram.base <- valid.hexagram[["base"]]
 valid.hexagram.pred <- valid.hexagram[["pred"]]
 
+saveRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.base.rds")
+saveRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.pred.rds")
+getwd()
 ```
 ```{r Evaluate model}
 ptm <- proc.time() # start time
@@ -241,6 +244,7 @@ elapsed
 
 1/11/2019 8:49 pm
 ngrams.model.4.rds after removing rows with profanity in prediction words
+2000 hexagram tests from validation data
 correct.pred.rate no.pred
 1            0.5965  0.0045
 elapsed 
