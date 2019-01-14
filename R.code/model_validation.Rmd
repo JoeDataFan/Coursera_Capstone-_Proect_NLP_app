@@ -83,7 +83,7 @@ split_base_pred_freq <- function(dfm.ngram){
 }
 
 # function to run validation data through model
-predict_next_word <- function(prev.words, model = ng.model.clean){
+predict_next_word <- function(prev.words, model = ng.model){
     string <- str_replace_all(prev.words, "_", " ")
     n = 4:1
     patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
@@ -152,8 +152,8 @@ rm(all.text)
 
 #ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.3.rds")
 
-ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.4.rds")
-#getwd()
+ng.model <- readRDS(file = "./NExt_word_prediction/model.data/ngrams.mod.4.clean.rds")
+
 
 ```
 ```{r prep validation data}
@@ -172,9 +172,9 @@ rm(hexagram, corpus.sentences)
 valid.hexagram.base <- valid.hexagram[["base"]]
 valid.hexagram.pred <- valid.hexagram[["pred"]]
 
-saveRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.base.rds")
-saveRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.pred.rds")
-getwd()
+saveRDS(valid.hexagram.base, file = "./R.code/shiny.presentation.data/valid.hexagram.base.rds")
+saveRDS(valid.hexagram.pred, file = "./R.code/shiny.presentation.data/valid.hexagram.pred.rds")
+
 ```
 ```{r Evaluate model}
 ptm <- proc.time() # start time
@@ -186,20 +186,25 @@ proc.time() - ptm # end time and difference
 
 # randomly sample from validation data set
 valid.size <- 2000
-set.seed(345)
+seed <- 562
+set.seed(seed)
 valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
 
 # associated actual prediction for sample of validation data
-set.seed(345)
+set.seed(seed)
 valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
 
 ptm <- proc.time() # start time
 model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
     mutate(actual.pred = valid.pred.sample,
            result = pred == actual.pred)
-model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
+succes.rate <- model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
                          no.pred = sum(is.na(result))/length(result))
-(proc.time() - ptm)[3] / valid.size # end time and difference
+paste("Model correctly predicted next word", succes.rate[[1]]*100, "% of the time")
+
+time.per.test <- (proc.time() - ptm)[3] / valid.size # end time and difference
+
+paste("The model and test function took rouhgly", round(time.per.test[[1]], 5), "seconds per test")
 
 ```
 1/10/2019 1:00 pm
