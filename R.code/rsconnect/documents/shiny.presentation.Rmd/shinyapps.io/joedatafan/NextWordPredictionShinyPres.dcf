@@ -1,0 +1,12 @@
+name: NextWordPredictionShinyPres
+title: NextWordPredictionShinyPres
+username:
+account: joedatafan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 640255
+bundleId: 1812921
+url: https://joedatafan.shinyapps.io/NextWordPredictionShinyPres/
+when: 1547458558.76702
+asMultiple: FALSE
+asStatic: FALSE
