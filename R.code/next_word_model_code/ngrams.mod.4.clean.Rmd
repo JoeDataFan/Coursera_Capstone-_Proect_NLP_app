@@ -177,6 +177,7 @@ ngrams.freq <- ngrams.freq[-profanity(ngrams.freq[,pred])[profanity > 0, element
 
 # Save an object to file under the "next_word_prediction" app
 saveRDS(ngrams.freq, file = "./Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
+saveRDS(ngrams.freq, file = "./R.code/shiny.presentation.data/ngrams.mod.4.clean.rds")
 
 proc.time() - ptm # end time and difference
 # Restore the object
