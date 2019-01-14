@@ -27,8 +27,8 @@ loadData <- function() {
     if (exists("textString")) {
         textString <- unique(textString)
         textString <- as.character(textString[[1]])
-        textString <- paste(textString, collapse = " ")
-        textString
+        textString <- paste(trimws(textString), collapse = " ")
+        textString <- str_replace_all(textString, "\\s+", " ")
     }
 }
 
@@ -45,6 +45,7 @@ server <- function(input, output, session) {
         # function to run previous word string through model
         predict_next_word <- function(prev.words, model = ng.model){
             prev.words <- trimws(prev.words)
+            prev.words <- str_replace_all(prev.words, "[:punct:]", "")
             n = 5:1
             patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
             test.input <- data.table(base = stri_extract(prev.words, regex = patt))
@@ -56,7 +57,7 @@ server <- function(input, output, session) {
             prep.input <- prep.input$base
             results.dt <- model[base %in% prep.input]
             result <- results.dt[order(-prob)[1], pred][1]
-            result <- if_else(is.na(result), " ", result)
+            result <- if_else(is.na(result), "prediction", result)
             print(result)
         }
         
@@ -71,7 +72,7 @@ server <- function(input, output, session) {
         # function to save previous words and prediction
         textData <- reactive({
             data <- paste(trimws(input$previous.words), input$inText)
-            data <- data.table(returned.text = c(data))
+            data <- data.table(returned.text = trimws(data))
         })
         
         # When the "Yes, that's it!" button is clicked, save the data
