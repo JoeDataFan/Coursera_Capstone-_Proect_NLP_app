@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Next Word Prediction App"
 author: "Joe Rubash"
 date: "January 12, 2019"
 output: 
@@ -12,19 +12,25 @@ runtime: shiny
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
+# clear enviroment
+rm(list = ls())
+
 # load required libraries
 library(shiny)
 library(data.table)
 library(stringi)
-library(tidyverse)
+library(stringr)
+library(dplyr)
+library(tidyr)
 library(purrr)
+library(magrittr)
 
 # load model
-ng.model <- readRDS(file = "../Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
+ng.model <- readRDS(file = "./shiny.presentation.data/ngrams.mod.4.clean.rds")
 
 # load validation data
-valid.hexagram.base <- loadRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.base.rds")
-valid.hexagram.pred <- loadRDS(valid.hexagram.base, file = "./data/temp.data/valid.hexagram.pred.rds")
+valid.hexagram.base <- readRDS(file = "./shiny.presentation.data/valid.hexagram.base.rds")
+valid.hexagram.pred <- readRDS(file = "./shiny.presentation.data/valid.hexagram.pred.rds")
 
 # function to run validation data through model
 predict_next_word <- function(prev.words, model = ng.model){
@@ -43,58 +49,97 @@ predict_next_word <- function(prev.words, model = ng.model){
     }
 ```
 
-## Modivation for the app
-why is this important?
- 
-## Cleaning Data
-all the issues
-why cleaning helps?
+## Modivation for the app | Why would we want to predict the next word?  
+* We spend a lot of time typing  
+* If an app could predict the next word you intent to type it could 
+speed up the typing process.   
+* Benefits could include:  
+    + Making apps easier to use => good user experience  
+    + Allow those with disabilities to more easily communicate
+    + Correct common typing mistakes mistakes (duplicate words)
+    
 
-## Building The Model
-```{r validation}
+
+## Building The Prediction Model  
+### General strategy:  
+A large collection of text was used to determine the probability that a word would 
+occur given the previous word or words. Using this probability table, just the last 
+few words of new text could be used to find the associated next word with the highest
+probability.
+
+### A few model building details:  
+* Text from twitter, blogs and news feeds were used to build the model    
+* Removing punctuation and non ASCII characters helped to improve accuracy   
+* Final probabilities were adjusted to give greater weight to longer ngrams
+
+```{r validation, message=FALSE, warning=FALSE, include=FALSE}
+# validation of models 
+
 # randomly sample from validation data set
 valid.size <- 2000
-set.seed(345)
+seed <- 562
+set.seed(seed)
 valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
 
 # associated actual prediction for sample of validation data
-set.seed(345)
+set.seed(seed)
 valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
 
 ptm <- proc.time() # start time
 model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
     mutate(actual.pred = valid.pred.sample,
            result = pred == actual.pred)
-model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
+succes.rate <- model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
                          no.pred = sum(is.na(result))/length(result))
-(proc.time() - ptm)[3] / valid.size # end time and difference
+# percent success rate
+perc.success.rate <- succes.rate[[1]]*100
+# time per test
+time.per.test <- round((proc.time() - ptm)[3] / valid.size, 4) # end time and difference
+
 ```
 
-show piece of final probilities table
-show how accurate the model is
-show how fast
-size of table
+## Application of The Model
+<style>
+  .col1 {
+    columns: 1 400px;
+    -webkit-columns: 1 400px;
+    -moz-columns: 1 400px;
+  }
+  .col2 {
+    columns: 1 400px;         /* number of columns and width in pixels*/
+    -webkit-columns: 1 400px; /* chrome, safari */
+    -moz-columns: 1 400px;    /* firefox */
+  }
+</style>
 
-## Building The Application
-how it works
-why its cool
+<div class="col2">
+To use the prediction model, the last 5, 4, 3, 2 and 1 words are taken from the 
+input text. These word combinations are then found in the model and the associated
+next word with the highest probability is returned as the predicted next word.  
+</div>
 
-## Next Word Prediction App
+### Performance
+From 2000 tests (using text never seen by the model)
 
+<div class="col1">
+* Correctly predicted the next word `r perc.success.rate`% of the time  
+* Took roughly `r time.per.test` seconds per test  
+* The model occupies `r round(object.size(ng.model)/1000000, 1)`MB in the R environment 
+</div> 
+ 
+----
 ```{r next word app, message=FALSE, warning=FALSE, ehco=FALSE}
-# load required libraries
-library(shiny)
-library(data.table)
-library(stringi)
-library(tidyverse)
-
-# load model
-ng.model <- readRDS(file = "../Next_word_prediction/model.data/ngrams.mod.4.clean.rds")
 
 shinyApp(
     ui = fluidPage(
+        titlePanel(
+        h2("Next Word Prediction App")),
         # instructions
-        h4('Type in the box below and the next word will be predicted'),
+        h3('Type in the box below and the next word will be predicted. Click ENTER to combine into a sentence.'),
+        h4("This app is intended to make life a little easier by predicting the 
+next word you intend to type based on previous words. If the predicted word matches
+your expectations hit ENTER and all text will be saved and then displayed below.
+Continue to follow this method and a long string of text will be created fairly quickly."),
         
         # script to allow "enter" key to be used instead of pressing button
         tags$script(' $(document).on("keydown", function (e) {
@@ -108,11 +153,8 @@ shinyApp(
         # text output giving predicted next word based on previous
         textInput("inText", "Predicted next word:"),
         #div(style="display: inline-block;vertical-align:top; width: 100px;",textInput("inText", "Next word:")),          
-        textAreaInput("combination", "Combination:", width = '300px', height = '100px'),
-        br(),
-        actionButton("clear.text", "Start over"),
-        br(),
-        textOutput("textString")
+        textAreaInput("combination", "Combination:", width = '300px', height = '60px'),
+        actionButton("clear.text", "Start over")
     ),
 
     server = function(input, output, session) {
@@ -135,8 +177,8 @@ shinyApp(
                 if (exists("textString")) {
                     textString <- unique(textString)
                     textString <- as.character(textString[[1]])
-                    textString <- paste(textString, collapse = " ")
-                    textString
+                    textString <- paste(trimws(textString), collapse = " ")
+                    textString <- str_replace_all(textString, "\\s+", " ")
                 }
             }
             
@@ -148,6 +190,7 @@ shinyApp(
                 # function to run previous word string through model
                 predict_next_word <- function(prev.words, model = ng.model){
                     prev.words <- trimws(prev.words)
+                    prev.words <- str_replace_all(prev.words, "[:punct:]", "")
                     n = 5:1
                     patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
                     test.input <- data.table(base = stri_extract(prev.words, regex = patt))
@@ -158,7 +201,7 @@ shinyApp(
                     prep.input <- prep.input$base
                     results.dt <- model[base %in% prep.input]
                     result <- results.dt[order(-prob)[1], pred][1]
-                    result <- if_else(is.na(result), " ", result)
+                    result <- if_else(is.na(result), "prediction", result)
                     print(result)
                 }
                 
@@ -175,7 +218,7 @@ shinyApp(
                 # function to save previous words and prediction
                 textData <- reactive({
                     data <- paste(trimws(input$previous.words), input$inText)
-                    data <- data.table(returned.text = c(data))
+                    data <- data.table(returned.text = c(trimws(data)))
                 })
                 
                 # When the "Yes, that's it!" button is clicked, save the data
@@ -220,11 +263,9 @@ shinyApp(
                                     value = loadData()
                     )
                 },ignoreNULL = TRUE, ignoreInit = TRUE, once = TRUE)
+                
             })
     }
 )
 
 ```
-
-
-
