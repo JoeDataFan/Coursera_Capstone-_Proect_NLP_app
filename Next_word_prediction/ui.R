@@ -25,9 +25,9 @@ ui <- fluidPage(
                              
                              
                              # instructions
-                             h4('Type in the box below and the next word'),
-                             h4('will be predicted. Click ENTER to combine'),
-                             h4('into a sentence.'),
+                             h4('Type in the box below and the next word will'),
+                             h4('be predicted when you click the SPACEBAR.'),
+                             h4('Click ENTER to combine into a sentence.'),
                              
                              # script to allow "enter" key to be used instead of pressing button
                              tags$script(' $(document).on("keydown", function (e) {
