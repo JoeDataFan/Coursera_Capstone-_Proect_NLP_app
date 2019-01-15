@@ -5,9 +5,9 @@ account: joedatafan
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 637327
-bundleId: 1812937
+bundleId: 1814749
 url: https://joedatafan.shinyapps.io/Next_word_prediction/
-when: 1547459350.66653
+when: 1547529951.64075
 asMultiple: FALSE
 asStatic: FALSE
 ignoredFiles: model.data/ngrams.freq.15.rds|model.data/ngrams.freq.25.rds|model.data/ngrams.mod.3.rds|model.data/ngrams.mod.4.rds
