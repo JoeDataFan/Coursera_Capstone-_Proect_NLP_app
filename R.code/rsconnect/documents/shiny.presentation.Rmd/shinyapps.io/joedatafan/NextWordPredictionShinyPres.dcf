@@ -5,8 +5,8 @@ account: joedatafan
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 640255
-bundleId: 1812921
+bundleId: 1814766
 url: https://joedatafan.shinyapps.io/NextWordPredictionShinyPres/
-when: 1547458558.76702
+when: 1547530577.00554
 asMultiple: FALSE
 asStatic: FALSE
