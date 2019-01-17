@@ -29,24 +29,24 @@ library(magrittr)
 ng.model <- readRDS(file = "./shiny.presentation.data/ngrams.mod.4.clean.rds")
 
 # load validation data
-valid.hexagram.base <- readRDS(file = "./shiny.presentation.data/valid.hexagram.base.rds")
-valid.hexagram.pred <- readRDS(file = "./shiny.presentation.data/valid.hexagram.pred.rds")
+#valid.hexagram.base <- readRDS(file = "./shiny.presentation.data/valid.hexagram.base.rds")
+#valid.hexagram.pred <- readRDS(file = "./shiny.presentation.data/valid.hexagram.pred.rds")
 
 # function to run validation data through model
-predict_next_word <- function(prev.words, model = ng.model){
-    string <- str_replace_all(prev.words, "_", " ")
-    n = 4:1
-    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
-    test.input <- data.table(base = stri_extract(string, regex = patt))
-    test.input <- test.input[, order := length(test.input$base):1]
-    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
-        tolower()] 
-    prep.input <- setkey(prep.input, base)
-    prep.input <- prep.input$base
-    results.dt <- model[base %in% prep.input]
-    result <- results.dt[order(-prob)[1], .(base, pred)]
-    print(result)
-    }
+#predict_next_word <- function(prev.words, model = ng.model){
+#    string <- str_replace_all(prev.words, "_", " ")
+#    n = 4:1
+#    patt = sprintf("\\w+( \\w+){0,%d}$", n-1)
+#    test.input <- data.table(base = stri_extract(string, regex = patt))
+#    test.input <- test.input[, order := length(test.input$base):1]
+#    prep.input <- test.input[, base := str_replace_all(test.input$base, "\\s+", "_") %>% 
+#        tolower()] 
+#    prep.input <- setkey(prep.input, base)
+#    prep.input <- prep.input$base
+#    results.dt <- model[base %in% prep.input]
+#    result <- results.dt[order(-prob)[1], .(base, pred)]
+#    print(result)
+#    }
 ```
 
 ## Modivation for the app | Why would we want to predict the next word?  
@@ -77,24 +77,24 @@ probability.
 
 # randomly sample from validation data set
 valid.size <- 1000
-seed <- 562
-set.seed(seed)
-valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
-
-# associated actual prediction for sample of validation data
-set.seed(seed)
-valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
-
-ptm <- proc.time() # start time
-model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
-    mutate(actual.pred = valid.pred.sample,
-           result = pred == actual.pred)
-succes.rate <- model.test %>% summarise(correct.pred.rate = sum(result[!is.na(result)])/length(result),
-                         no.pred = sum(is.na(result))/length(result))
-# percent success rate
-perc.success.rate <- succes.rate[[1]]*100
-# time per test
-time.per.test <- round((proc.time() - ptm)[3] / valid.size, 4) # end time and difference
+#seed <- 562
+#set.seed(seed)
+#valid.base.sample <- sample(valid.hexagram.base, valid.size, replace = FALSE)
+#
+## associated actual prediction for sample of validation data
+#set.seed(seed)
+#valid.pred.sample <- sample(valid.hexagram.pred, valid.size, replace = FALSE)
+#
+#ptm <- proc.time() # start time
+#model.test <- map_df(.x = valid.base.sample, .f = predict_next_word) %>%
+#    mutate(actual.pred = valid.pred.sample,
+#           result = pred == actual.pred)
+#succes.rate <- model.test %>% summarise(correct.pred.rate = #sum(result[!is.na(result)])/length(result),
+#                         no.pred = sum(is.na(result))/length(result))
+## percent success rate
+#perc.success.rate <- succes.rate[[1]]*100
+## time per test
+#time.per.test <- round((proc.time() - ptm)[3] / valid.size, 4) # end time and difference
 
 ```
 
@@ -122,8 +122,8 @@ next word with the highest probability is returned as the predicted next word.
 From `r valid.size` tests (using text never seen by the model)
 
 <div class="col1">
-* Correctly predicted the next word `r perc.success.rate`% of the time  
-* Took roughly `r time.per.test` seconds per test  
+* Correctly predicted the next word 59.5% of the time  
+* Took roughly 0.17 seconds per test  
 * The model occupies `r round(object.size(ng.model)/1000000, 1)`MB in the R environment 
 </div> 
  
